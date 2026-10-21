@@ -57,7 +57,7 @@ export default function Home() {
             <div className="hero-content">
               <p className="section-label">Blind dating, by method</p>
               <h1 id="hero-title">No photos. <em>Just the person.</em></h1>
-              <p className="hero-description">Everyone answers the same questionnaire and sets their dating preferences. We turn your answers into a vector and use similarity search to find the people closest to you. You talk here, and only swap socials if you both want to.</p>
+              <p className="hero-description">Everyone sees the same questionnaire and sets their dating preferences. Answer at least three questions and skip the rest if you like. We compare your answers to suggest introductions. You talk here, and only swap socials if you both want to.</p>
               <div className="hero-actions">
                 <Link className="landing-button" href={heroHref}>{heroLabel}</Link>
                 <a className="landing-text-link" href="#how-it-works">See how matching works <span aria-hidden="true">↓</span></a>
@@ -97,7 +97,7 @@ export default function Home() {
         <section className="promise-strip" aria-label="Our promises">
           <ul className="landing-width promises">
             <li><strong>0</strong><span>photos, ever. We never ask for one.</span></li>
-            <li><strong>{QUESTIONS.length}</strong><span>research-based questions every member answers</span></li>
+            <li><strong>{QUESTIONS.length}</strong><span>questions to explore, with skips allowed</span></li>
             <li><strong>2</strong><span>yeses before any conversation opens</span></li>
             <li><strong>You</strong><span>decide if socials are exchanged</span></li>
           </ul>
@@ -114,7 +114,7 @@ export default function Home() {
               <li>
                 <span className="step-number">01</span>
                 <h3>Fill in the questionnaire</h3>
-                <p>Everyone answers the same 20 questions, drawn from a published personality scale and dating research, plus their dating preferences: who you&apos;d like to meet and the age range you&apos;re open to.</p>
+                <p>Explore 20 questions drawn from a personality scale and dating research. Answer at least three and skip any that don&apos;t fit. You also set your dating preferences: who you&apos;d like to meet and the age range you&apos;re open to.</p>
               </li>
               <li>
                 <span className="step-number">02</span>

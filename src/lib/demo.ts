@@ -3,7 +3,7 @@ import { answersInOrder } from "./personality.ts";
 /** Reserved identities used only by the local, disposable demo login. */
 const DEMO_ID = /^demo:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-// Answers follow QUESTION_IDS order: ten Mini-IPIP items for extraversion and
+// Answers follow QUESTION_IDS order: seven Mini-IPIP items for extraversion and
 // agreeableness, then conscientiousness, neuroticism, imagination, and the three
 // OkCupid questions. Each sample is written to fit its description in the demo.
 export const SAMPLE_PROFILES = [
