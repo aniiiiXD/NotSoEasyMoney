@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { SAMPLE_PROFILES } from "@/lib/demo";
+import { SAMPLE_PROFILES, SAMPLE_VIEWER_ANSWERS } from "@/lib/demo";
 import { rankCandidates, type MatchingProfile } from "@/lib/matching";
 import {
+  emptyAnswers,
   normalizeAnswers,
   QUESTIONNAIRE_VERSION,
   QUESTIONS,
@@ -16,26 +17,6 @@ import styles from "./preview.module.css";
 type Screen = "profile" | "questions" | "introductions" | "match" | "chat" | "analytics";
 type DemoScreen = Exclude<Screen, "analytics">;
 type Message = { from: "you" | "sample"; text: string };
-
-const sampleAnswers: PersonalityAnswers = {
-  social_setting: 2,
-  planning_style: 3,
-  novelty: 4,
-  conversation_style: 3,
-  message_frequency: 3,
-  date_atmosphere: 2,
-};
-
-function emptyAnswers(): PersonalityAnswers {
-  return {
-    social_setting: null,
-    planning_style: null,
-    novelty: null,
-    conversation_style: null,
-    message_frequency: null,
-    date_atmosphere: null,
-  };
-}
 
 const sampleDetails: Record<string, { description: string; opening: string; replies: string[] }> = {
   sage: {
@@ -160,7 +141,7 @@ export default function Preview() {
   }
 
   function useSampleProfile() {
-    setAnswers({ ...sampleAnswers });
+    setAnswers({ ...SAMPLE_VIEWER_ANSWERS });
     setUsedSampleAnswers(true);
     setScreen("introductions");
   }
@@ -260,7 +241,7 @@ export default function Preview() {
             <div className={styles.progressMeta}><span>Question {questionIndex + 1} of {QUESTIONS.length}</span><span>{answeredCount} answered</span></div>
             <div className={styles.progressTrack} aria-hidden="true"><span style={{ width: `${((questionIndex + 1) / QUESTIONS.length) * 100}%` }} /></div>
             <h1 ref={headingRef} id="question-heading" tabIndex={-1}>{question.prompt}</h1>
-            <p className={styles.lede}>There are no right answers. Pick what feels closest, or skip.</p>
+            <p className={styles.lede}>From the {question.source}. There are no right answers. Pick what feels closest, or skip.</p>
             <fieldset className={styles.choices} aria-labelledby="question-heading">
               {question.anchors.map((anchor, index) => {
                 const value = (index + 1) as AnswerValue;

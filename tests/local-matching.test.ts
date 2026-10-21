@@ -4,9 +4,10 @@ import type { Pool } from "pg";
 import { getDb, lockProfiles } from "../src/lib/db.ts";
 import { decideCandidate, getOwnProfile, listCandidates, parseProfileInput, saveProfile } from "../src/lib/local-matching.ts";
 import { setAnalyticsConsent } from "../src/lib/analytics.ts";
+import { answersInOrder } from "../src/lib/personality.ts";
 
 let db: Pool | undefined;
-const answers = { social_setting: 2, planning_style: 3, novelty: 4, conversation_style: 2, message_frequency: 3, date_atmosphere: null };
+const answers = answersInOrder([2, 3, 4, 2, 3, ...Array(15).fill(null)]);
 const profile = { alias: "Moonbeam", age: 29, gender: "woman", seeking: ["man"], minAge: 18, maxAge: 45, answers, analyticsConsent: false };
 const otherProfile = { ...profile, alias: "Sundial", gender: "man", seeking: ["woman"] };
 
@@ -46,11 +47,11 @@ async function count(sql: string, values: string[] = []): Promise<number> {
 }
 
 test("validates the complete adult profile without guessing missing answers", () => {
-  assert.equal(parseProfileInput(profile).answers.date_atmosphere, null);
+  assert.equal(parseProfileInput(profile).answers.sailboat, null);
   assert.throws(() => parseProfileInput({ ...profile, age: 17 }), /18/);
   assert.throws(() => parseProfileInput({ ...profile, seeking: [] }), /meet/);
   assert.throws(() => parseProfileInput({ ...profile, minAge: 40, maxAge: 20 }), /age range/);
-  assert.throws(() => parseProfileInput({ ...profile, answers: { ...answers, social_setting: null, planning_style: null, novelty: null } }), /at least three/);
+  assert.throws(() => parseProfileInput({ ...profile, answers: { ...answers, life_of_party: null, talk_at_parties: null, dont_talk_much: null } }), /at least three/);
 });
 
 test("creates a blind room only after two eligible people opt in", async () => {
@@ -62,7 +63,7 @@ test("creates a blind room only after two eligible people opt in", async () => {
   assert.equal(first[0].blindAlias, "Sundial");
   assert(!JSON.stringify(first).includes("google:private-b"));
   assert(!JSON.stringify(first).includes("vector"));
-  assert(!JSON.stringify(first).includes("social_setting"));
+  assert(!JSON.stringify(first).includes("life_of_party"));
   assert(!JSON.stringify(first).includes("score"));
   const second = (await listCandidates(database(), "google:private-b"))!;
   assert.equal(await decideCandidate(database(), "google:private-a", first[0].candidateId, "like"), "pending");

@@ -4,7 +4,7 @@ import type { Pool, PoolClient } from "pg";
 import { recordEventInTransaction, recordRoomEventInTransaction } from "./analytics.ts";
 import { lockProfiles, withTransaction } from "./db.ts";
 import { isEligiblePair, rankCandidates, type Candidate, type MatchingProfile } from "./matching.ts";
-import { normalizeAnswers, parsePersonalityAnswers, QUESTIONNAIRE_VERSION, type PersonalityAnswers, type PersonalityVector } from "./personality.ts";
+import { emptyAnswers, normalizeAnswers, parsePersonalityAnswers, QUESTIONNAIRE_VERSION, type PersonalityAnswers, type PersonalityVector } from "./personality.ts";
 import { isDemoViewer, isReservedDemoIdentity, isSampleForViewer, sameMatchingPool, sampleId, SAMPLE_PROFILES } from "./demo.ts";
 
 export const GENDERS = ["woman", "man", "nonbinary", "another identity"] as const;
@@ -72,7 +72,9 @@ async function getRow(db: Database, userId: string): Promise<ProfileRow | null> 
 export async function getOwnProfile(db: Database, userId: string): Promise<ProfileInput | null> {
   const row = await getRow(db, userId);
   if (!row) return null;
-  return { alias: row.alias, age: row.age, gender: row.gender as Gender, seeking: JSON.parse(row.seeking), minAge: row.min_age, maxAge: row.max_age, answers: JSON.parse(row.answers), analyticsConsent: row.analytics_consent === 1 };
+  // Answers to an earlier questionnaire don't fit the current questions, so the person starts the questions again.
+  const answers = row.questionnaire_version === QUESTIONNAIRE_VERSION ? JSON.parse(row.answers) : emptyAnswers();
+  return { alias: row.alias, age: row.age, gender: row.gender as Gender, seeking: JSON.parse(row.seeking), minAge: row.min_age, maxAge: row.max_age, answers, analyticsConsent: row.analytics_consent === 1 };
 }
 
 export async function saveProfile(db: Pool, userId: string, value: unknown): Promise<{ created: boolean }> {

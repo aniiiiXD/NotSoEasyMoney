@@ -3,12 +3,12 @@
 import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { QUESTIONS, type AnswerValue, type PersonalityAnswers, type PersonalityQuestionId } from "@/lib/personality";
+import { SAMPLE_VIEWER_ANSWERS } from "@/lib/demo";
+import { emptyAnswers, hasAnswers, QUESTIONS, type AnswerValue, type PersonalityAnswers, type PersonalityQuestionId } from "@/lib/personality";
 import type { ProfileInput } from "@/lib/local-matching";
 import styles from "../app.module.css";
 
 const genderOptions = ["woman", "man", "nonbinary", "another identity"] as const;
-const emptyAnswers = Object.fromEntries(QUESTIONS.map((question) => [question.id, null])) as PersonalityAnswers;
 const lastStep = QUESTIONS.length + 1;
 
 export default function ProfileForm({ initial, logout, demoMode }: { initial: ProfileInput | null; logout: () => Promise<void>; demoMode: boolean }) {
@@ -19,7 +19,7 @@ export default function ProfileForm({ initial, logout, demoMode }: { initial: Pr
   const [seeking, setSeeking] = useState<string[]>(initial?.seeking ?? []);
   const [minAge, setMinAge] = useState(initial ? String(initial.minAge) : "18");
   const [maxAge, setMaxAge] = useState(initial ? String(initial.maxAge) : "99");
-  const [answers, setAnswers] = useState<PersonalityAnswers>(initial?.answers ?? emptyAnswers);
+  const [answers, setAnswers] = useState<PersonalityAnswers>(() => initial?.answers ?? emptyAnswers());
   const [analyticsConsent, setAnalyticsConsent] = useState(initial?.analyticsConsent ?? false);
   const [step, setStep] = useState(0);
   const [error, setError] = useState("");
@@ -52,7 +52,7 @@ export default function ProfileForm({ initial, logout, demoMode }: { initial: Pr
     setSeeking([...genderOptions]);
     setMinAge("18");
     setMaxAge("99");
-    setAnswers(Object.fromEntries(QUESTIONS.map((question, index) => [question.id, [2, 3, 4, 3, 3, 2][index]])) as PersonalityAnswers);
+    setAnswers({ ...SAMPLE_VIEWER_ANSWERS });
     setSkipped(new Set());
     setError("");
     setSampleError(false);
@@ -78,7 +78,7 @@ export default function ProfileForm({ initial, logout, demoMode }: { initial: Pr
   async function startSampleDemo() {
     await saveProfile({
       alias: "Alex", age: 27, gender: "nonbinary", seeking: [...genderOptions], minAge: 18, maxAge: 99,
-      answers: Object.fromEntries(QUESTIONS.map((question, index) => [question.id, [2, 3, 4, 3, 3, 2][index]])),
+      answers: SAMPLE_VIEWER_ANSWERS,
       analyticsConsent: false,
     }, true);
   }
@@ -105,6 +105,7 @@ export default function ProfileForm({ initial, logout, demoMode }: { initial: Pr
         </div>
       </header>
       <main className={styles.narrow}>
+        {initial && !hasAnswers(initial.answers) && step === 0 && <p className={styles.demoNote}><strong>New questions.</strong> We’ve updated the questionnaire. Please answer the new questions to keep getting introductions.</p>}
         {demoMode && step === 0 && <p className={styles.demoNote}><strong>Local demo.</strong> You’re exploring with sample profiles and scripted replies.</p>}
         <div className={styles.progressHeader} aria-live="polite"><span>{demoMode ? "Demo profile" : initial ? "Edit profile" : "Your profile"}</span><span>Step {step + 1} of {lastStep + 1}</span></div>
         <div className={styles.progressTrack} aria-hidden="true"><span style={{ width: `${((step + 1) / (lastStep + 1)) * 100}%` }} /></div>
@@ -127,7 +128,7 @@ export default function ProfileForm({ initial, logout, demoMode }: { initial: Pr
           </section>}
 
           {question && <section className={styles.formSection} aria-labelledby="question-title">
-            <div className={styles.intro}><p className={styles.kicker}>Question {step} of {QUESTIONS.length} · {answered} answered</p><h1 id="question-title" tabIndex={-1}>{question.prompt}</h1><p>There are no right answers. Answer at least three; skip anything that doesn’t fit.</p></div>
+            <div className={styles.intro}><p className={styles.kicker}>Question {step} of {QUESTIONS.length} · {answered} answered · {question.source}</p><h1 id="question-title" tabIndex={-1}>{question.prompt}</h1><p>Describe yourself as you generally are now, not as you wish to be. There are no right answers. Answer at least three; skip anything that doesn’t fit.</p></div>
             <fieldset className={styles.question} aria-labelledby="question-title">
               <div className={styles.answerList}>{question.anchors.map((anchor, index) => {
                 const value = (index + 1) as AnswerValue;

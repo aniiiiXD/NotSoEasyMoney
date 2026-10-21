@@ -1,19 +1,38 @@
 /**
- * A short, self-reported set of preferences for introductions.
+ * A self-reported questionnaire used to rank introductions.
  *
- * These questions are not a validated personality assessment and cannot
- * predict attraction or relationship outcomes. A new questionnaire version
- * is required if the questions, response anchors, or scoring change.
+ * Seventeen items come from the Mini-IPIP (Donnellan et al., 2006), a short
+ * public-domain Big Five measure from the International Personality Item Pool
+ * (https://ipip.ori.org/MiniIPIPKey.htm). Three come from OkCupid's 2011
+ * analysis of questions shared by long-term couples. Items are compared one by
+ * one and are never summed into trait scores, so reverse-keyed items keep
+ * their original wording. Similarity on these answers cannot predict
+ * attraction or relationship outcomes. A new questionnaire version is
+ * required if the questions, response anchors, or scoring change.
  */
-export const QUESTIONNAIRE_VERSION = "1.0.0" as const;
+export const QUESTIONNAIRE_VERSION = "2.0.0" as const;
 
 export const QUESTION_IDS = [
-  "social_setting",
-  "planning_style",
-  "novelty",
-  "conversation_style",
-  "message_frequency",
-  "date_atmosphere",
+  "life_of_party",
+  "talk_at_parties",
+  "dont_talk_much",
+  "keep_in_background",
+  "sympathize_feelings",
+  "feel_emotions",
+  "not_interested_in_others",
+  "chores_right_away",
+  "like_order",
+  "forget_to_put_back",
+  "make_a_mess",
+  "mood_swings",
+  "upset_easily",
+  "relaxed",
+  "seldom_blue",
+  "vivid_imagination",
+  "not_interested_abstract",
+  "horror_movies",
+  "travel_alone",
+  "sailboat",
 ] as const;
 
 export type PersonalityQuestionId = (typeof QUESTION_IDS)[number];
@@ -26,75 +45,51 @@ export interface PersonalityQuestion {
   readonly prompt: string;
   /** Ordered answers for values 1 through 5; skipping is represented by null. */
   readonly anchors: readonly [string, string, string, string, string];
+  /** Where the item comes from, shown beside the question. */
+  readonly source: string;
 }
 
+// The IPIP's standard response scale for describing yourself.
+const ACCURACY = [
+  "Very inaccurate",
+  "Moderately inaccurate",
+  "Neither accurate nor inaccurate",
+  "Moderately accurate",
+  "Very accurate",
+] as const;
+
+const AGREEMENT = [
+  "Strongly disagree",
+  "Disagree",
+  "Neither agree nor disagree",
+  "Agree",
+  "Strongly agree",
+] as const;
+
+const MINI_IPIP = "Mini-IPIP personality scale";
+const OKCUPID = "OkCupid long-term couples research";
+
 export const QUESTIONS = [
-  {
-    id: "social_setting",
-    prompt: "What setting do you enjoy when getting to know someone?",
-    anchors: [
-      "Just the two of us",
-      "Mostly one-on-one",
-      "A mix of one-on-one and groups",
-      "Mostly in small groups",
-      "In larger groups",
-    ],
-  },
-  {
-    id: "planning_style",
-    prompt: "How do you like to make plans?",
-    anchors: [
-      "Well in advance",
-      "Usually in advance",
-      "A mix of both",
-      "Usually at short notice",
-      "In the moment",
-    ],
-  },
-  {
-    id: "novelty",
-    prompt: "What kinds of activities do you enjoy sharing?",
-    anchors: [
-      "Mostly familiar activities",
-      "More familiar than new activities",
-      "A mix of familiar and new activities",
-      "More new than familiar activities",
-      "Mostly new activities",
-    ],
-  },
-  {
-    id: "conversation_style",
-    prompt: "What kinds of conversations do you usually enjoy?",
-    anchors: [
-      "Mostly light and playful",
-      "More light than in-depth",
-      "A mix of light and in-depth",
-      "More in-depth than light",
-      "Mostly in-depth",
-    ],
-  },
-  {
-    id: "message_frequency",
-    prompt: "How often do you like to message someone you're getting to know?",
-    anchors: [
-      "About once a week or less",
-      "Every few days",
-      "About once a day",
-      "A few times a day",
-      "Throughout the day",
-    ],
-  },
-  {
-    id: "date_atmosphere",
-    prompt: "What atmosphere do you enjoy when spending time together?",
-    anchors: [
-      "Very quiet and low-key",
-      "Mostly quiet and low-key",
-      "A mix of quiet and lively",
-      "Mostly lively",
-      "Very lively",
-    ],
-  },
+  { id: "life_of_party", prompt: "I am the life of the party.", anchors: ACCURACY, source: MINI_IPIP },
+  { id: "talk_at_parties", prompt: "I talk to a lot of different people at parties.", anchors: ACCURACY, source: MINI_IPIP },
+  { id: "dont_talk_much", prompt: "I don't talk a lot.", anchors: ACCURACY, source: MINI_IPIP },
+  { id: "keep_in_background", prompt: "I keep in the background.", anchors: ACCURACY, source: MINI_IPIP },
+  { id: "sympathize_feelings", prompt: "I sympathize with others' feelings.", anchors: ACCURACY, source: MINI_IPIP },
+  { id: "feel_emotions", prompt: "I feel others' emotions.", anchors: ACCURACY, source: MINI_IPIP },
+  { id: "not_interested_in_others", prompt: "I am not really interested in others.", anchors: ACCURACY, source: MINI_IPIP },
+  { id: "chores_right_away", prompt: "I get chores done right away.", anchors: ACCURACY, source: MINI_IPIP },
+  { id: "like_order", prompt: "I like order.", anchors: ACCURACY, source: MINI_IPIP },
+  { id: "forget_to_put_back", prompt: "I often forget to put things back in their proper place.", anchors: ACCURACY, source: MINI_IPIP },
+  { id: "make_a_mess", prompt: "I make a mess of things.", anchors: ACCURACY, source: MINI_IPIP },
+  { id: "mood_swings", prompt: "I have frequent mood swings.", anchors: ACCURACY, source: MINI_IPIP },
+  { id: "upset_easily", prompt: "I get upset easily.", anchors: ACCURACY, source: MINI_IPIP },
+  { id: "relaxed", prompt: "I am relaxed most of the time.", anchors: ACCURACY, source: MINI_IPIP },
+  { id: "seldom_blue", prompt: "I seldom feel blue.", anchors: ACCURACY, source: MINI_IPIP },
+  { id: "vivid_imagination", prompt: "I have a vivid imagination.", anchors: ACCURACY, source: MINI_IPIP },
+  { id: "not_interested_abstract", prompt: "I am not interested in abstract ideas.", anchors: ACCURACY, source: MINI_IPIP },
+  { id: "horror_movies", prompt: "I like horror movies.", anchors: AGREEMENT, source: OKCUPID },
+  { id: "travel_alone", prompt: "I would enjoy traveling alone in another country.", anchors: AGREEMENT, source: OKCUPID },
+  { id: "sailboat", prompt: "Chucking it all to go live on a sailboat sounds fun.", anchors: AGREEMENT, source: OKCUPID },
 ] as const satisfies readonly PersonalityQuestion[];
 
 export const QUESTIONNAIRE = {
@@ -159,4 +154,20 @@ export function normalizeAnswers(input: unknown): PersonalityVector {
   }
 
   return vector;
+}
+
+/** Answers with every question skipped. */
+export function emptyAnswers(): PersonalityAnswers {
+  return Object.fromEntries(QUESTION_IDS.map((id) => [id, null])) as PersonalityAnswers;
+}
+
+/** Build answers from values listed in QUESTION_IDS order. */
+export function answersInOrder(values: readonly AnswerValue[]): PersonalityAnswers {
+  if (values.length !== QUESTION_IDS.length) throw new RangeError(`Expected ${QUESTION_IDS.length} answers.`);
+  return Object.fromEntries(QUESTION_IDS.map((id, index) => [id, values[index]])) as PersonalityAnswers;
+}
+
+/** True when at least one question has an answer. */
+export function hasAnswers(answers: PersonalityAnswers): boolean {
+  return Object.values(answers).some((answer) => answer !== null);
 }

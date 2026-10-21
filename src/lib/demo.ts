@@ -1,11 +1,19 @@
+import { answersInOrder } from "./personality.ts";
+
 /** Reserved identities used only by the local, disposable demo login. */
 const DEMO_ID = /^demo:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+// Answers follow QUESTION_IDS order: ten Mini-IPIP items for extraversion and
+// agreeableness, then conscientiousness, neuroticism, imagination, and the three
+// OkCupid questions. Each sample is written to fit its description in the demo.
 export const SAMPLE_PROFILES = [
-  { key: "sage", alias: "Sage (sample)", answers: { social_setting: 2, planning_style: 3, novelty: 4, conversation_style: 4, message_frequency: 3, date_atmosphere: 2 } },
-  { key: "river", alias: "River (sample)", answers: { social_setting: 4, planning_style: 4, novelty: 5, conversation_style: 2, message_frequency: 3, date_atmosphere: 4 } },
-  { key: "ember", alias: "Ember (sample)", answers: { social_setting: 3, planning_style: 2, novelty: 3, conversation_style: 5, message_frequency: 2, date_atmosphere: 3 } },
+  { key: "sage", alias: "Sage (sample)", answers: answersInOrder([2, 3, 3, 3, 5, 4, 1, 3, 4, 2, 2, 2, 2, 4, 4, 5, 1, 2, 4, 3]) },
+  { key: "river", alias: "River (sample)", answers: answersInOrder([5, 5, 1, 1, 3, 3, 2, 2, 2, 4, 3, 3, 2, 4, 3, 4, 2, 5, 5, 5]) },
+  { key: "ember", alias: "Ember (sample)", answers: answersInOrder([1, 2, 4, 5, 5, 5, 1, 4, 5, 2, 1, 3, 3, 3, 3, 4, 1, 1, 2, 1]) },
 ] as const;
+
+/** Sample answers for the demo viewer, shared by the landing page, demo, and join form. */
+export const SAMPLE_VIEWER_ANSWERS = answersInOrder([3, 4, 2, 3, 4, 4, 2, 3, 4, 3, 2, 2, 2, 4, 4, 4, 2, 2, 4, 3]);
 
 export function isDemoViewer(userId: string): boolean {
   return DEMO_ID.test(userId);

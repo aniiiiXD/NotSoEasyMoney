@@ -70,7 +70,12 @@ try {
   assert.equal(await registerGoogleAccount(db, users[0], secondCode), false);
   const alice = await session(users[0]);
   const bob = await session(users[1]);
-  const answers = { social_setting: 2, planning_style: 3, novelty: 4, conversation_style: 3, message_frequency: 3, date_atmosphere: 2 };
+  const answers = {
+    life_of_party: 3, talk_at_parties: 4, dont_talk_much: 2, keep_in_background: 3, sympathize_feelings: 4,
+    feel_emotions: 4, not_interested_in_others: 2, chores_right_away: 3, like_order: 4, forget_to_put_back: 3,
+    make_a_mess: 2, mood_swings: 2, upset_easily: 2, relaxed: 4, seldom_blue: 4,
+    vivid_imagination: 4, not_interested_abstract: 2, horror_movies: 2, travel_alone: 4, sailboat: 3,
+  };
   const profile = (alias) => ({ alias, age: 26, gender: "nonbinary", seeking: ["nonbinary"], minAge: 18, maxAge: 40, answers, analyticsConsent: true });
   assert.equal((await request("/api/profile")).status, 401);
   assert.equal((await json("/api/profile", alice, "POST", profile(aliases[0]))).created, true);
