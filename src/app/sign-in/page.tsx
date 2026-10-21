@@ -4,12 +4,18 @@ import { headers } from "next/headers";
 import { AuthError } from "next-auth";
 import { auth, authConfigured, googleConfigured, localTestLoginEnabled, signIn } from "@/auth";
 import { isLoopbackHost, localDemoEnabled } from "./demo";
+import { signInErrorMessage } from "./auth-error";
 import styles from "./sign-in.module.css";
 
 async function googleLogin() {
   "use server";
   if (!authConfigured || !googleConfigured) redirect("/sign-in?error=Configuration");
-  await signIn("google", { redirectTo: "/join" });
+  try {
+    await signIn("google", { redirectTo: "/join" });
+  } catch (error) {
+    if (error instanceof AuthError) redirect("/sign-in?error=OAuthSignInError");
+    throw error;
+  }
 }
 
 async function localLogin(formData: FormData) {
@@ -43,6 +49,7 @@ export default async function SignInPage({ searchParams }: {
 }) {
   if (authConfigured && (await auth())?.user?.id) redirect("/join");
   const { error } = await searchParams;
+  const errorMessage = signInErrorMessage(error);
   const showDemo = localDemoEnabled() && isLoopbackHost((await headers()).get("host"));
   return (
     <main className={styles.page}>
@@ -54,7 +61,7 @@ export default async function SignInPage({ searchParams }: {
         <p className={styles.eyebrow}>WELCOME TO MYSTERY MATCH</p>
         <h1>Good to see you.</h1>
         <p className={styles.intro}>Sign in to start making more meaningful connections.</p>
-        {error && <p className={styles.error} role="alert">{error === "CredentialsSignin" ? "That handle or passphrase didn’t work. Try again." : "Sign-in could not start. Check your setup and try again."}</p>}
+        {errorMessage && <p className={styles.error} role="alert">{errorMessage}</p>}
         {showDemo && <div className={styles.demo}>
           <form action={demoLogin}><button className={styles.demoButton} type="submit">Try the local demo</button></form>
           <p>Explore with sample profiles. Starting the demo creates a fresh session on this device.</p>

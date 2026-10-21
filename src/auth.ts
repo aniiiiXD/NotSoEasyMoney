@@ -1,13 +1,13 @@
 import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import Google from "next-auth/providers/google";
 import { getDb } from "@/lib/db";
 import { recordEvent } from "@/lib/analytics";
+import { authCallbacks, googleProvider, localAuthCookies } from "@/lib/auth-config";
 import { authorizeDemo, localDemoEnabled } from "@/app/sign-in/demo";
 
-export const googleConfigured = Boolean(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET);
-export const authConfigured = Boolean(process.env.AUTH_SECRET);
+export const googleConfigured = Boolean(process.env.AUTH_GOOGLE_ID?.trim() && process.env.AUTH_GOOGLE_SECRET?.trim());
+export const authConfigured = Boolean(process.env.AUTH_SECRET?.trim());
 export const localTestLoginEnabled =
   process.env.NODE_ENV === "development" && process.env.LOCAL_TEST_LOGIN === "true";
 
@@ -43,20 +43,11 @@ function authorizeLocalTest(handleInput: unknown, passwordInput: unknown, reques
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: process.env.AUTH_SECRET,
-  pages: { signIn: "/sign-in" },
+  ...(process.env.NODE_ENV === "development" ? { cookies: localAuthCookies } : {}),
+  pages: { signIn: "/sign-in", error: "/sign-in" },
   session: { strategy: "jwt" },
   providers: [
-    ...(googleConfigured ? [Google({
-      clientId: process.env.AUTH_GOOGLE_ID!,
-      clientSecret: process.env.AUTH_GOOGLE_SECRET!,
-      checks: ["pkce", "state"],
-      // Auth.js supplies a fresh internal ID for OAuth users without an adapter.
-      // Preserve the stable provider subject as providerAccountId, not personal data.
-      profile(profile) {
-        if (!profile.sub) throw new Error("Google did not provide a subject");
-        return { id: profile.sub, name: null, email: null, image: null };
-      },
-    })] : []),
+    ...(googleConfigured ? [googleProvider(process.env.AUTH_GOOGLE_ID!, process.env.AUTH_GOOGLE_SECRET!)] : []),
     ...(localDemoEnabled() ? [Credentials({
       id: "demo",
       name: "Local demo",
@@ -74,31 +65,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     })] : []),
   ],
-  callbacks: {
-    jwt({ token, user, account }) {
-      if (account?.provider === "google" && account.providerAccountId) {
-        token.userId = `google:${account.providerAccountId}`;
-      } else if (user?.id) {
-        token.userId = user.id;
-      }
-      // Do not put Google profile details into the session or its token.
-      delete token.name;
-      delete token.email;
-      delete token.picture;
-      delete token.sub;
-      return token;
-    },
-    session({ session, token }) {
-      return {
-        expires: session.expires,
-        ...(typeof token.userId === "string" ? { user: { id: token.userId } } : {}),
-      };
-    },
-  },
+  callbacks: authCallbacks,
   events: {
     signIn({ user, account }) {
-      const userId = account?.provider === "google" && account.providerAccountId
-        ? `google:${account.providerAccountId}` : user.id;
+      const userId = account?.provider === "google"
+        ? (account.providerAccountId ? `google:${account.providerAccountId}` : undefined)
+        : user.id;
       if (userId) {
         try { recordEvent(userId, "signed_in"); } catch { /* Analytics is optional. */ }
       }

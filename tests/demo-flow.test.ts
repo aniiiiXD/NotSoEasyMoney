@@ -61,9 +61,11 @@ test("a demo hello creates a mutual room with scripted replies, then blocking cl
   saveProfile(db, demoA, profile);
   saveProfile(db, demoB, profile);
   const candidate = listCandidates(db, demoA)![0];
-  assert.equal(decideCandidate(db, demoA, candidate.candidateId, "like"), "matched");
+  let matchedRoomId: string | undefined;
+  assert.equal(decideCandidate(db, demoA, candidate.candidateId, "like", (roomId) => { matchedRoomId = roomId; }), "matched");
   assert.equal(db.prepare("SELECT count(*) AS count FROM decisions WHERE decision = 'like'").get()?.count, 2);
   const room = listRooms(demoA)[0];
+  assert.equal(matchedRoomId, room.id);
   assert(room.alias.includes("(sample)"));
   assert.deepEqual(listRooms(demoB), []);
   assert.equal(readRoom(demoB, room.id), null);

@@ -25,11 +25,14 @@ export async function POST(request: Request) {
     if (!body || typeof body !== "object" || Array.isArray(body)) return Response.json({ error: "Invalid request." }, { status: 400 });
     const { candidateId, decision } = body as Record<string, unknown>;
     if (typeof candidateId !== "string" || candidateId.length > 100 || (decision !== "like" && decision !== "pass")) return Response.json({ error: "Invalid decision." }, { status: 400 });
+    let matchedRoomId: string | undefined;
     const status = decideCandidate(getDb(), userId, candidateId, decision, (roomId, firstUserId, secondUserId) => {
+      // The new room belongs to this signed-in member; let the client open it directly.
+      matchedRoomId = roomId;
       recordMatchEvent(firstUserId, roomId);
       recordMatchEvent(secondUserId, roomId);
     });
-    return status === "unavailable" ? Response.json({ error: "This introduction is no longer available." }, { status: 404 }) : Response.json({ status });
+    return status === "unavailable" ? Response.json({ error: "This introduction is no longer available." }, { status: 404 }) : Response.json({ status, ...(matchedRoomId ? { roomId: matchedRoomId } : {}) });
   } catch {
     return Response.json({ error: "Could not save your choice. Please try again." }, { status: 500 });
   }

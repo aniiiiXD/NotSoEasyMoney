@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 export function localDemoEnabled(): boolean {
-  return process.env.NODE_ENV === "development" && Boolean(process.env.AUTH_SECRET);
+  return process.env.NODE_ENV === "development" && Boolean(process.env.AUTH_SECRET?.trim());
 }
 
 export function isLoopbackHost(host: string | null): boolean {

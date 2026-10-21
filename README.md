@@ -26,7 +26,7 @@ Open the local address printed by Next.js. The development server binds to `127.
 
 ## Try the demo
 
-On the local sign-in page, choose **Try the local demo** to start a fresh session without Google credentials. In the profile wizard, **Use sample answers** fills in a sample profile and all six answers, which you can change as you move through the steps. Say hello to a sample introduction to open a mutual match; messages receive a scripted sample reply. The **Sample analytics** link shows illustrative numbers, not live activity. Signing out and starting a new demo creates a fresh session.
+On the local sign-in page, choose **Try the local demo** to start a fresh session without Google credentials. In the profile wizard, **Explore with a sample profile** takes you straight to fictional introductions. To walk through the questions, choose **Use sample answers and review the questions**, or enter your own answers. Say hello to a sample introduction to open a mutual match and go directly to its conversation; messages receive a scripted sample reply. The **Sample analytics** link shows illustrative numbers, not live activity. Signing out and starting a new demo creates a fresh session.
 
 The demo is available only in development on a loopback address and requires the local `AUTH_SECRET`. Sample profiles are private to their demo session and are never shown to ordinary accounts. Demo activity is excluded from real analytics. Demo profiles and conversations are stored locally in the same database as other local data.
 
@@ -36,7 +36,7 @@ Local profiles, messages, and settings are stored in `.local/closer.sqlite` on t
 
 ## Google sign-in
 
-Google sign-in is wired up but requires your own OAuth credentials:
+Google sign-in is wired up but requires your own OAuth credentials. For a full walkthrough, including troubleshooting, see [Set up Google sign-in locally](docs/google-auth.md):
 
 1. In [Google Cloud](https://console.cloud.google.com/), configure the OAuth consent screen and create an OAuth client of type **Web application**. Add your Google account as a test user if the app's audience is still in testing.
 2. Add an authorized redirect URI matching the exact local address and port you use, followed by `/api/auth/callback/google`. For example, if the server prints `http://127.0.0.1:3002`, use `http://127.0.0.1:3002/api/auth/callback/google`.

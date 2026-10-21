@@ -14,12 +14,12 @@
 .sidebarTitle span { min-width: 22px; padding: 3px 6px; border-radius: 4px; background: #f0eef5; color: #625b81; text-align: center; font-size: 10px; font-weight: 700; }
 .sidebarSubtitle { margin: 8px 0 22px; color: #6f706c; font-size: 12px; line-height: 1.5; }
 .roomList { display: grid; gap: 4px; }
-.roomLink { min-width: 0; min-height: 72px; display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 6px; }
+.roomLink { min-width: 0; min-height: 76px; display: flex; align-items: center; gap: 12px; padding: 12px; border-bottom: 1px solid #f0efec; border-radius: 6px; }
 .roomLink:hover, .selectedRoom { background: #f4f3f8; }
 .avatar { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; background: #dedaed; color: #4d4766; font-family: Georgia, serif; font-size: 18px; }
 .roomDetails { min-width: 0; }
-.roomDetails strong, .roomDetails small, .person strong, .person small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.roomDetails strong, .person strong { font-size: 13px; font-weight: 700; }
+.roomDetails strong, .roomDetails small, .person h1, .person small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.roomDetails strong, .person h1 { margin: 0; font-size: 13px; font-weight: 700; }
 .roomDetails small, .person small { margin-top: 4px; color: #6f706c; font-size: 11px; }
 .roomArrow { margin-left: auto; color: #625b81; }
 .noRooms { max-width: 240px; margin: 10px 0; color: #6f706c; font-size: 13px; line-height: 1.7; }
@@ -32,8 +32,8 @@
 .block { min-height: 44px; padding: 0 10px; border: 1px solid #dededb; border-radius: 5px; background: #fff; color: #6f706c; font-size: 12px; font-weight: 600; cursor: pointer; }
 .block:hover:not(:disabled) { color: #242423; border-color: #bcbdb8; }
 .block:disabled { opacity: .45; cursor: not-allowed; }
-.messageList { flex: 1; min-height: 300px; max-height: 480px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 24px 18px; }
-.bubble { max-width: min(85%, 480px); padding: 11px 14px; border-radius: 8px; font-size: 14px; line-height: 1.55; overflow-wrap: anywhere; white-space: pre-wrap; }
+.messageList { flex: 1; min-height: 300px; max-height: 480px; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 10px; padding: 24px 18px; }
+.bubble { position: relative; max-width: min(85%, 480px); padding: 11px 14px; border-radius: 8px; font-size: 14px; line-height: 1.55; overflow-wrap: anywhere; white-space: pre-wrap; }
 .bubble p { margin: 0; }
 .mine { align-self: flex-end; background: #dedaed; color: #242423; }
 .theirs { align-self: flex-start; background: #f3f3f1; }
@@ -41,26 +41,42 @@
 .empty h2 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: 27px; font-weight: 400; letter-spacing: -.035em; line-height: 1.2; }
 .empty > p:not(.emptyLabel) { margin: 12px 0 0; color: #6f706c; font-size: 13px; line-height: 1.7; }
 .empty a { min-height: 44px; display: inline-flex; align-items: center; gap: 8px; margin-top: 12px; color: #625b81; font-size: 12px; font-weight: 700; }
-.composer { padding: 0 16px 20px; }
+.composer { position: relative; padding: 0 16px 20px; }
 .composer > div { display: flex; align-items: end; gap: 10px; padding: 6px 6px 6px 13px; border: 1px solid #dededb; border-radius: 6px; }
 .composer > div:focus-within { border-color: #625b81; }
-.composer textarea { flex: 1; min-width: 0; min-height: 44px; max-height: 120px; resize: vertical; padding: 12px 0; border: 0; outline: none; background: transparent; color: #242423; font-size: 16px; line-height: 1.35; }
+.composer textarea { flex: 1; min-width: 0; min-height: 44px; max-height: 120px; resize: none; padding: 12px 0; border: 0; outline: none; background: transparent; color: #242423; font-size: 16px; line-height: 1.35; }
 .composer textarea::placeholder { color: #888984; }
-.composer button { flex: none; min-width: 60px; min-height: 44px; padding: 0 12px; border: 0; border-radius: 4px; background: #242423; color: #fff; font-size: 12px; font-weight: 700; cursor: pointer; }
+.composer button { flex: none; min-width: 74px; min-height: 44px; padding: 0 12px; border: 0; border-radius: 4px; background: #242423; color: #fff; font-size: 12px; font-weight: 700; cursor: pointer; }
 .composer button:hover:not(:disabled) { background: #3b3b39; }
 .composer button:disabled { opacity: .4; cursor: not-allowed; }
 .composer > p { margin: 9px 0 0; color: #6f706c; text-align: center; font-size: 11px; }
 .composer .sendError { margin: 0 0 8px; color: #8b4944; text-align: left; font-size: 12px; }
+.composerHint span { display: none; }
 .srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+.selectedPage .heading, .selectedPage .demoNote { display: none; }
+@media (max-width: 759px) {
+  .selectedPage { position: fixed; inset: 0; width: 100%; height: 100vh; height: 100dvh; overflow: clip; }
+  .selectedPage .globalHeader { display: none; }
+  .selectedPage .content { width: 100%; height: 100vh; height: 100dvh; padding: 0; }
+  .selectedPage .workspace { height: 100%; min-height: 0; border: 0; border-radius: 0; }
+  .selectedPage .conversationSelected { height: 100%; min-height: 0; }
+  .selectedPage .conversationHeader { padding: max(10px, env(safe-area-inset-top)) 16px 10px 4px; }
+  .selectedPage .messageList { min-height: 0; max-height: none; padding: 20px 16px; }
+  .selectedPage .composer { padding: 0 16px max(16px, env(safe-area-inset-bottom)); }
+}
 @media (min-width: 760px) {
   .content { width: min(100% - 64px, 1160px); padding-top: 54px; }
   .heading { margin-bottom: 30px; }
   .heading h1 { font-size: 48px; }
-  .workspace { min-height: 580px; display: grid; grid-template-columns: 300px minmax(0, 1fr); }
-  .sidebar, .sidebarSelected { min-height: 580px; display: flex; border-right: 1px solid #eaeaea; padding: 28px 20px; }
-  .conversation, .conversationSelected { display: flex; min-height: 580px; }
+  .workspace { height: min(660px, max(500px, calc(100dvh - 320px))); min-height: 500px; display: grid; grid-template-columns: 300px minmax(0, 1fr); }
+  .selectedPage .content { padding-top: 28px; }
+  .selectedPage .workspace { height: min(660px, max(360px, calc(100dvh - 205px))); min-height: 360px; }
+  .sidebar, .sidebarSelected { min-height: 0; display: flex; border-right: 1px solid #eaeaea; padding: 28px 20px; }
+  .roomList { overflow-y: auto; }
+  .conversation, .conversationSelected { display: flex; min-height: 0; }
   .conversationHeader { padding: 18px 28px; }
   .back { display: none; }
-  .messageList { padding: 28px; }
+  .messageList { min-height: 0; max-height: none; padding: 28px; }
   .composer { padding: 0 28px 24px; }
 }
+@media (min-width: 760px) and (hover: hover) and (pointer: fine) { .composerHint span { display: inline; } }
