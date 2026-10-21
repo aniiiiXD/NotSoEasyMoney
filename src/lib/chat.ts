@@ -1,19 +1,28 @@
 import { randomUUID } from "node:crypto";
-import { getDb } from "./db.ts";
-import type { DatabaseSync } from "node:sqlite";
+import type { PoolClient } from "pg";
+import { getDb, lockProfiles, withTransaction } from "./db.ts";
+import { recordRoomEventInTransaction } from "./analytics.ts";
 import { isSampleForViewer } from "./demo.ts";
 
-type RoomRow = { id: string; alias: string; other_id: string; last_message_at: string | null };
-type MessageRow = { id: string; sender_id: string; body: string; created_at: string };
+type RoomPair = { user_a: string; user_b: string };
+type LockedRoom = RoomPair & { other_id: string };
+type RoomRow = { id: string; alias: string; last_message_at: string | null };
+type ReadRoomRow = {
+  alias: string;
+  id: string | null;
+  body: string | null;
+  mine: boolean | null;
+  created_at: string | null;
+};
 
 export type RoomSummary = { id: string; alias: string; lastMessageAt: string | null };
 export type ChatMessage = { id: string; body: string; mine: boolean; createdAt: string };
 
-// This predicate is repeated in reads so an in-flight block cannot turn a
-// preliminary room check into a later unrestricted message query.
+// Every read and write rechecks membership, both active profiles, and blocks
+// in either direction. Parameter $1 is always the authenticated viewer.
 const allowedRoom = `
   r.active = 1
-  AND (r.user_a = $viewer OR r.user_b = $viewer)
+  AND (r.user_a = $1 OR r.user_b = $1)
   AND me.active = 1 AND other.active = 1
   AND NOT EXISTS (
     SELECT 1 FROM blocks b
@@ -22,42 +31,65 @@ const allowedRoom = `
   )
 `;
 const joinedProfiles = `
-  JOIN profiles me ON me.user_id = $viewer
-  JOIN profiles other ON other.user_id = CASE WHEN r.user_a = $viewer THEN r.user_b ELSE r.user_a END
+  JOIN profiles me ON me.user_id = $1
+  JOIN profiles other ON other.user_id = CASE WHEN r.user_a = $1 THEN r.user_b ELSE r.user_a END
 `;
 
-function findRoom(db: DatabaseSync, userId: string, roomId: string): RoomRow | undefined {
-  return db.prepare(`
-    SELECT r.id, other.alias, other.user_id AS other_id, NULL AS last_message_at FROM rooms r
-    ${joinedProfiles}
-    WHERE r.id = $room AND ${allowedRoom}
-  `).get({ viewer: userId, room: roomId }) as RoomRow | undefined;
+/** Lock participants in the shared order, then recheck the room's access. */
+async function lockAllowedRoom(client: PoolClient, userId: string, roomId: string): Promise<LockedRoom | null> {
+  // Read only rooms the actor belongs to before acquiring any profile locks.
+  const { rows: pairs } = await client.query<RoomPair>(
+    "SELECT user_a, user_b FROM rooms WHERE id = $1 AND (user_a = $2 OR user_b = $2)",
+    [roomId, userId],
+  );
+  const pair = pairs[0];
+  if (!pair) return null;
+
+  await lockProfiles(client, [pair.user_a, pair.user_b]);
+  const { rows } = await client.query<LockedRoom>(`
+    SELECT r.user_a, r.user_b, other.user_id AS other_id
+    FROM rooms r ${joinedProfiles}
+    WHERE r.id = $2 AND r.user_a = $3 AND r.user_b = $4 AND ${allowedRoom}
+    FOR UPDATE OF r
+  `, [userId, roomId, pair.user_a, pair.user_b]);
+  return rows[0] ?? null;
 }
 
-export function listRooms(userId: string): RoomSummary[] {
-  const rows = getDb().prepare(`
-    SELECT r.id, other.alias, other.user_id AS other_id,
-      (SELECT max(m.created_at) FROM messages m WHERE m.room_id = r.id) AS last_message_at
+export async function listRooms(userId: string): Promise<RoomSummary[]> {
+  const { rows } = await getDb().query<RoomRow>(`
+    SELECT r.id, other.alias, latest.last_message_at
     FROM rooms r ${joinedProfiles}
+    LEFT JOIN LATERAL (
+      SELECT max(m.created_at) AS last_message_at FROM messages m WHERE m.room_id = r.id
+    ) latest ON true
     WHERE ${allowedRoom}
-    ORDER BY COALESCE(last_message_at, r.created_at) DESC, r.id
-  `).all({ viewer: userId }) as RoomRow[];
+    ORDER BY COALESCE(latest.last_message_at, r.created_at) DESC, r.id
+  `, [userId]);
   return rows.map((row) => ({ id: row.id, alias: row.alias, lastMessageAt: row.last_message_at }));
 }
 
-export function readRoom(userId: string, roomId: string): { alias: string; messages: ChatMessage[] } | null {
-  const db = getDb();
-  const room = findRoom(db, userId, roomId);
-  if (!room) return null;
-  const rows = db.prepare(`
-    SELECT m.id, m.sender_id, m.body, m.created_at
-    FROM messages m JOIN rooms r ON r.id = m.room_id ${joinedProfiles}
-    WHERE r.id = $room AND ${allowedRoom}
-    ORDER BY m.created_at DESC, m.id DESC LIMIT 100
-  `).all({ viewer: userId, room: roomId }) as MessageRow[];
-  return { alias: room.alias, messages: rows.reverse().map((row) => ({
-    id: row.id, body: row.body, mine: row.sender_id === userId, createdAt: row.created_at,
-  })) };
+export async function readRoom(userId: string, roomId: string): Promise<{ alias: string; messages: ChatMessage[] } | null> {
+  // Fetch room access and messages in one statement so both use the same
+  // Postgres snapshot, including when a block is committed concurrently.
+  const { rows } = await getDb().query<ReadRoomRow>(`
+    SELECT other.alias, m.id, m.body,
+      CASE WHEN m.id IS NOT NULL THEN m.sender_id = $1 ELSE NULL END AS mine,
+      m.created_at
+    FROM rooms r ${joinedProfiles}
+    LEFT JOIN LATERAL (
+      SELECT id, sender_id, body, created_at FROM messages
+      WHERE room_id = r.id ORDER BY created_at DESC, id DESC LIMIT 100
+    ) m ON true
+    WHERE r.id = $2 AND ${allowedRoom}
+    ORDER BY m.created_at ASC NULLS FIRST, m.id ASC NULLS FIRST
+  `, [userId, roomId]);
+  if (rows.length === 0) return null;
+  const messages = rows.flatMap((row) =>
+    row.id !== null && row.body !== null && row.created_at !== null
+      ? [{ id: row.id, body: row.body, mine: row.mine === true, createdAt: row.created_at }]
+      : [],
+  );
+  return { alias: rows[0].alias, messages };
 }
 
 export type SendMessageResult =
@@ -70,70 +102,66 @@ const SAMPLE_REPLIES = [
   "Demo reply: Thanks for sharing. What is a small thing that made you smile lately?",
 ];
 
-export function sendMessage(userId: string, roomId: string, input: unknown): SendMessageResult {
+export async function sendMessage(userId: string, roomId: string, input: unknown): Promise<SendMessageResult> {
   if (typeof input !== "string") return { ok: false, reason: "invalid" };
   const body = input.trim();
   if (!body || body.length > 2000 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(body)) {
     return { ok: false, reason: "invalid" };
   }
-  const db = getDb();
-  db.exec("BEGIN IMMEDIATE");
-  try {
-    const room = findRoom(db, userId, roomId);
-    if (!room) {
-      db.exec("ROLLBACK");
-      return { ok: false, reason: "not_found" };
-    }
+  return withTransaction(getDb(), async (client) => {
+    const room = await lockAllowedRoom(client, userId, roomId);
+    if (!room) return { ok: false, reason: "not_found" };
+
+    // The actor's profile lock also serializes sends across different rooms.
     const since = new Date(Date.now() - 60_000).toISOString();
-    const recent = db.prepare("SELECT count(*) AS count FROM messages WHERE sender_id = ? AND created_at >= ?")
-      .get(userId, since) as { count: number };
-    if (recent.count >= 30) {
-      db.exec("ROLLBACK");
-      return { ok: false, reason: "rate_limited" };
-    }
+    const { rows: recent } = await client.query<{ count: string }>(
+      "SELECT count(*) AS count FROM messages WHERE sender_id = $1 AND created_at >= $2",
+      [userId, since],
+    );
+    if (Number(recent[0].count) >= 30) return { ok: false, reason: "rate_limited" };
+
     const id = randomUUID();
     const isSample = isSampleForViewer(userId, room.other_id);
-    // Preserve the order of a sample's instant reply and a subsequent message,
-    // even when several writes fall within the same millisecond.
-    const lastMessage = isSample ? db.prepare("SELECT max(created_at) AS time FROM messages WHERE room_id = ?").get(roomId) as { time: string | null } : null;
+    // Preserve sample-reply order even when multiple writes share a millisecond.
+    const lastMessage = isSample
+      ? (await client.query<{ time: string | null }>("SELECT max(created_at) AS time FROM messages WHERE room_id = $1", [roomId])).rows[0]
+      : null;
     const lastTime = lastMessage?.time ? Date.parse(lastMessage.time) : 0;
     const timestamp = isSample && Number.isFinite(lastTime) ? Math.max(Date.now(), lastTime + 1) : Date.now();
     const createdAt = new Date(timestamp).toISOString();
-    db.prepare("INSERT INTO messages (id, room_id, sender_id, body, created_at) VALUES (?, ?, ?, ?, ?)")
-      .run(id, roomId, userId, body, createdAt);
+    await client.query(
+      "INSERT INTO messages (id, room_id, sender_id, body, created_at) VALUES ($1, $2, $3, $4, $5)",
+      [id, roomId, userId, body, createdAt],
+    );
     let sampleReply: ChatMessage | undefined;
     if (isSample) {
-      const count = db.prepare("SELECT count(*) AS count FROM messages WHERE room_id = ? AND sender_id = ?")
-        .get(roomId, room.other_id) as { count: number };
-      sampleReply = { id: randomUUID(), body: SAMPLE_REPLIES[count.count % SAMPLE_REPLIES.length], mine: false, createdAt: new Date(timestamp + 1).toISOString() };
-      db.prepare("INSERT INTO messages (id, room_id, sender_id, body, created_at) VALUES (?, ?, ?, ?, ?)")
-        .run(sampleReply.id, roomId, room.other_id, sampleReply.body, sampleReply.createdAt);
+      const { rows: count } = await client.query<{ count: string }>(
+        "SELECT count(*) AS count FROM messages WHERE room_id = $1 AND sender_id = $2",
+        [roomId, room.other_id],
+      );
+      sampleReply = { id: randomUUID(), body: SAMPLE_REPLIES[Number(count[0].count) % SAMPLE_REPLIES.length], mine: false, createdAt: new Date(timestamp + 1).toISOString() };
+      await client.query(
+        "INSERT INTO messages (id, room_id, sender_id, body, created_at) VALUES ($1, $2, $3, $4, $5)",
+        [sampleReply.id, roomId, room.other_id, sampleReply.body, sampleReply.createdAt],
+      );
     }
-    db.exec("COMMIT");
+    // The helper uses a savepoint: optional analytics failure cannot undo the
+    // message, and consent is checked while both profile locks are still held.
+    await recordRoomEventInTransaction(client, userId, roomId, "message_sent");
     return { ok: true, message: { id, body, mine: true, createdAt }, ...(sampleReply ? { sampleReply } : {}) };
-  } catch (error) {
-    db.exec("ROLLBACK");
-    throw error;
-  }
+  });
 }
 
 /** Block the other member and close the room in a single transaction. */
-export function blockRoom(userId: string, roomId: string): boolean {
-  const db = getDb();
-  db.exec("BEGIN IMMEDIATE");
-  try {
-    if (!findRoom(db, userId, roomId)) {
-      db.exec("ROLLBACK");
-      return false;
-    }
-    const room = db.prepare("SELECT user_a, user_b FROM rooms WHERE id = ?").get(roomId) as { user_a: string; user_b: string };
-    const other = room.user_a === userId ? room.user_b : room.user_a;
-    db.prepare("INSERT OR IGNORE INTO blocks (blocker_id, blocked_id) VALUES (?, ?)").run(userId, other);
-    db.prepare("UPDATE rooms SET active = 0 WHERE id = ?").run(roomId);
-    db.exec("COMMIT");
+export async function blockRoom(userId: string, roomId: string): Promise<boolean> {
+  return withTransaction(getDb(), async (client) => {
+    const room = await lockAllowedRoom(client, userId, roomId);
+    if (!room) return false;
+    await client.query(
+      "INSERT INTO blocks (blocker_id, blocked_id) VALUES ($1, $2) ON CONFLICT (blocker_id, blocked_id) DO NOTHING",
+      [userId, room.other_id],
+    );
+    await client.query("UPDATE rooms SET active = 0 WHERE id = $1", [roomId]);
     return true;
-  } catch (error) {
-    db.exec("ROLLBACK");
-    throw error;
-  }
+  });
 }

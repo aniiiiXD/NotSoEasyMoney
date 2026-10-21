@@ -69,7 +69,7 @@ export default function ProfileForm({ initial, logout, demoMode }: { initial: Pr
       router.push("/discover");
       router.refresh();
     } catch {
-      setError("Could not connect. Check that the local server is running and try again.");
+      setError("Could not connect. Please check your connection and try again.");
     } finally {
       setSaving(false);
     }
@@ -137,7 +137,7 @@ export default function ProfileForm({ initial, logout, demoMode }: { initial: Pr
           </section>}
 
           {step === lastStep && <section className={styles.formSection} aria-labelledby="privacy-title">
-            <div className={styles.intro}><p className={styles.kicker}>One last thing</p><h1 id="privacy-title" tabIndex={-1}>Your data, your choice.</h1><p>{demoMode ? "Your demo profile stays on this computer, and your introductions are fictional." : "Your profile stays on this computer in this local build. Other people see only your nickname during introductions."}</p></div>
+            <div className={styles.intro}><p className={styles.kicker}>One last thing</p><h1 id="privacy-title" tabIndex={-1}>Your data, your choice.</h1><p>{demoMode ? "Your demo profile is stored in our database, and your introductions are fictional." : "Your profile is stored securely in our database. Other people see only your nickname during introductions."}</p></div>
             <div className={styles.privacyBlock}>
               {demoMode ? <p>Demo activity is not included in real analytics. The demo dashboard uses illustrative numbers.</p> : initial ? <p>Manage your usage analytics choice in <Link href="/analytics/consent">privacy settings</Link>.</p> : <><label className={styles.consent}><input type="checkbox" checked={analyticsConsent} onChange={(event) => setAnalyticsConsent(event.target.checked)} /><span>Allow usage events to be included in aggregated analytics.</span></label><Link href="/analytics/consent" target="_blank">Learn about analytics</Link></>}
             </div>

@@ -51,6 +51,9 @@
 .googleMark { font-family: Arial, sans-serif; font-size: 17px; font-weight: 700; }
 .setup, .error { margin: 12px 0 0; padding: 12px 14px; border-radius: 5px; background: #f3f1f8; color: #625b81; font-size: 12px; line-height: 1.55; overflow-wrap: anywhere; }
 .error { margin: 0 0 18px; color: #8b4944; background: #fbf0ef; }
+.referral { margin: 0 0 20px; padding: 14px; border: 1px solid #e5e0ef; border-radius: 5px; background: #f8f7fb; color: #514b61; font-size: 12px; line-height: 1.55; overflow-wrap: anywhere; }
+.referral p { margin: 0; }
+.referral button { padding: 8px 0 0; border: 0; background: none; color: #625b81; font: inherit; text-decoration: underline; cursor: pointer; }
 .local { margin-top: 28px; color: #6f706c; font-size: 13px; line-height: 1.55; }
 .local summary { min-height: 44px; display: flex; align-items: center; color: #625b81; font-weight: 700; cursor: pointer; }
 .local summary::after { content: "+"; margin-left: auto; font-size: 18px; font-weight: 400; }

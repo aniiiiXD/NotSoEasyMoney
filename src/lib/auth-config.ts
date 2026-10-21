@@ -1,10 +1,9 @@
 import type { NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
 
-// A Vercel deployment cannot use the local SQLite file as shared storage.
-// Keep the provider disabled there until the hosted data layer is implemented.
+// Google accounts require both OAuth credentials and persistent storage.
 export function googleSignInAvailable(env: Record<string, string | undefined> = process.env): boolean {
-  return !env.VERCEL && Boolean(env.AUTH_GOOGLE_ID?.trim() && env.AUTH_GOOGLE_SECRET?.trim());
+  return Boolean(env.DATABASE_URL?.trim() && env.AUTH_GOOGLE_ID?.trim() && env.AUTH_GOOGLE_SECRET?.trim());
 }
 
 // Browsers share cookies across ports. Namespace development cookies so an
@@ -59,3 +58,30 @@ export const authCallbacks = {
     };
   },
 } satisfies NonNullable<NextAuthConfig["callbacks"]>;
+
+type GoogleRegistrationDependencies = {
+  readPendingReferral: () => Promise<string | null>;
+  registerGoogleAccount: (userId: string, referralCode: string | null) => Promise<unknown>;
+};
+
+/** Register the verified Google identity before Auth.js issues its session. */
+export function createAuthCallbacks({ readPendingReferral, registerGoogleAccount }: GoogleRegistrationDependencies) {
+  return {
+    ...authCallbacks,
+    async jwt(params) {
+      const token = authCallbacks.jwt(params);
+      if (!token) return null;
+      if (params.account?.provider === "google" && typeof token.userId === "string") {
+        try {
+          const code = await readPendingReferral();
+          await registerGoogleAccount(token.userId, code);
+        } catch {
+          // Auth.js may log callback errors; never include database or cookie
+          // details, and never issue a session after registration fails.
+          throw new Error("Account registration could not be completed.");
+        }
+      }
+      return token;
+    },
+  } satisfies NonNullable<NextAuthConfig["callbacks"]>;
+}

@@ -11,7 +11,7 @@ export default async function AnalyticsPage() {
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId || !isAnalyticsAdmin(userId)) notFound();
-  const report = getAnalyticsReport(userId);
+  const report = await getAnalyticsReport(userId);
   const cards = [
     { label: "Active members", description: "People with a recorded action", metric: report.metrics.activeUsers },
     { label: "Signed in", description: "People who signed in", metric: report.metrics.signedInUsers },

@@ -12,7 +12,7 @@ export async function GET() {
   const userId = session?.user?.id;
   if (!userId) return Response.json({ error: "Sign in required" }, { status: 401, headers });
   try {
-    const enabled = getAnalyticsConsent(userId);
+    const enabled = await getAnalyticsConsent(userId);
     if (enabled === null) return Response.json({ error: "Create a profile first" }, { status: 404, headers });
     return Response.json({ enabled }, { headers });
   } catch {
@@ -53,7 +53,7 @@ export async function PUT(request: Request) {
     return Response.json({ error: "Expected an enabled boolean" }, { status: 400, headers });
   }
   try {
-    if (!setAnalyticsConsent(userId, input.enabled)) {
+    if (!await setAnalyticsConsent(userId, input.enabled)) {
       return Response.json({ error: "Create a profile first" }, { status: 404, headers });
     }
     return Response.json({ enabled: input.enabled }, { headers });

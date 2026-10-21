@@ -14,7 +14,7 @@ export async function GET() {
     return Response.json({ error: "Access denied" }, { status: 403, headers });
   }
   try {
-    return Response.json(getAnalyticsReport(userId), { headers });
+    return Response.json(await getAnalyticsReport(userId), { headers });
   } catch {
     return Response.json({ error: "Analytics unavailable" }, { status: 500, headers });
   }

@@ -1,6 +1,5 @@
 import { auth, authConfigured } from "@/auth";
 import { readRoom, sendMessage } from "@/lib/chat";
-import { recordMessageEvent } from "@/lib/analytics";
 import { isSameOrigin } from "@/lib/request";
 
 type Context = { params: Promise<{ roomId: string }> };
@@ -10,7 +9,7 @@ export async function GET(_request: Request, { params }: Context) {
   const session = await auth();
   if (!session?.user?.id) return Response.json({ error: "Sign in to continue." }, { status: 401 });
   const { roomId } = await params;
-  const room = readRoom(session.user.id, roomId);
+  const room = await readRoom(session.user.id, roomId);
   if (!room) return Response.json({ error: "Conversation unavailable." }, { status: 404 });
   return Response.json(room, { headers: { "Cache-Control": "private, no-store" } });
 }
@@ -46,12 +45,11 @@ export async function POST(request: Request, { params }: Context) {
   try { input = await readLimitedJson(request); } catch { return Response.json({ error: "Invalid message." }, { status: 400 }); }
   const { roomId } = await params;
   const body = input && typeof input === "object" && "body" in input ? input.body : undefined;
-  const result = sendMessage(session.user.id, roomId, body);
+  const result = await sendMessage(session.user.id, roomId, body);
   if (!result.ok) {
     const status = result.reason === "not_found" ? 404 : result.reason === "rate_limited" ? 429 : 400;
     const error = result.reason === "not_found" ? "Conversation unavailable." : result.reason === "rate_limited" ? "Please slow down and try again." : "Write a message of up to 2,000 characters.";
     return Response.json({ error }, { status });
   }
-  recordMessageEvent(session.user.id, roomId);
   return Response.json({ message: result.message, ...(result.sampleReply ? { sampleReply: result.sampleReply } : {}) }, { status: 201, headers: { "Cache-Control": "private, no-store" } });
 }

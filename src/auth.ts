@@ -1,9 +1,11 @@
 import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import { cookies } from "next/headers";
 import { getDb } from "@/lib/db";
 import { recordEvent } from "@/lib/analytics";
-import { authCallbacks, googleProvider, googleSignInAvailable, localAuthCookies } from "@/lib/auth-config";
+import { REFERRAL_COOKIE, registerGoogleAccount, verifyReferralCode } from "@/lib/referrals";
+import { createAuthCallbacks, googleProvider, googleSignInAvailable, localAuthCookies } from "@/lib/auth-config";
 import { authorizeDemo, localDemoEnabled } from "@/app/sign-in/demo";
 
 export const googleConfigured = googleSignInAvailable();
@@ -15,7 +17,7 @@ type LocalAccount = { user_id: string; password_salt: string; password_hash: str
 
 // Local test accounts are deliberately unavailable outside development and do
 // not use or expose Google identity. They are never production authentication.
-function authorizeLocalTest(handleInput: unknown, passwordInput: unknown, request: Request) {
+async function authorizeLocalTest(handleInput: unknown, passwordInput: unknown, request: Request) {
   if (!localTestLoginEnabled || !authConfigured) return null;
   const hostname = new URL(request.url).hostname;
   if (hostname !== "127.0.0.1" && hostname !== "localhost" && hostname !== "[::1]") return null;
@@ -24,15 +26,14 @@ function authorizeLocalTest(handleInput: unknown, passwordInput: unknown, reques
   if (!/^[a-z0-9_-]{3,24}$/.test(handle) || passwordInput.length < 8 || passwordInput.length > 128) return null;
 
   const db = getDb();
-  let account = db.prepare("SELECT user_id, password_salt, password_hash FROM local_test_accounts WHERE handle = ?").get(handle) as LocalAccount | undefined;
+  let account = (await db.query<LocalAccount>("SELECT user_id, password_salt, password_hash FROM local_test_accounts WHERE handle = $1", [handle])).rows[0];
   if (!account) {
     const salt = randomBytes(16).toString("hex");
     const hash = scryptSync(passwordInput, salt, 64).toString("hex");
     const userId = `local:${randomUUID()}`;
     // A concurrent attempt to create the same handle must never replace it.
-    db.prepare("INSERT OR IGNORE INTO local_test_accounts (handle, user_id, password_salt, password_hash) VALUES (?, ?, ?, ?)")
-      .run(handle, userId, salt, hash);
-    account = db.prepare("SELECT user_id, password_salt, password_hash FROM local_test_accounts WHERE handle = ?").get(handle) as LocalAccount | undefined;
+    await db.query("INSERT INTO local_test_accounts (handle, user_id, password_salt, password_hash) VALUES ($1, $2, $3, $4) ON CONFLICT (handle) DO NOTHING", [handle, userId, salt, hash]);
+    account = (await db.query<LocalAccount>("SELECT user_id, password_salt, password_hash FROM local_test_accounts WHERE handle = $1", [handle])).rows[0];
   }
   if (!account) return null;
   const expected = Buffer.from(account.password_hash, "hex");
@@ -65,14 +66,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     })] : []),
   ],
-  callbacks: authCallbacks,
+  callbacks: createAuthCallbacks({
+    async readPendingReferral() {
+      const pending = (await cookies()).get(REFERRAL_COOKIE)?.value;
+      return verifyReferralCode(pending, process.env.AUTH_SECRET);
+    },
+    async registerGoogleAccount(userId, code) {
+      await registerGoogleAccount(getDb(), userId, code);
+    },
+  }),
   events: {
-    signIn({ user, account }) {
+    async signIn({ user, account }) {
       const userId = account?.provider === "google"
         ? (account.providerAccountId ? `google:${account.providerAccountId}` : undefined)
         : user.id;
       if (userId) {
-        try { recordEvent(userId, "signed_in"); } catch { /* Analytics is optional. */ }
+        try { await recordEvent(userId, "signed_in"); } catch { /* Analytics is optional. */ }
       }
     },
   },

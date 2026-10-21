@@ -1,17 +1,19 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { AuthError } from "next-auth";
 import { auth, authConfigured, googleConfigured, localTestLoginEnabled, signIn } from "@/auth";
 import { isLoopbackHost, localDemoEnabled } from "./demo";
 import { signInErrorMessage } from "./auth-error";
+import { getDb } from "@/lib/db";
+import { getActiveReferral, REFERRAL_COOKIE, verifyReferralCode } from "@/lib/referrals";
 import styles from "./sign-in.module.css";
 
 async function googleLogin() {
   "use server";
   if (!authConfigured || !googleConfigured) redirect("/sign-in?error=Configuration");
   try {
-    await signIn("google", { redirectTo: "/join" });
+    await signIn("google", { redirectTo: "/signup/complete" });
   } catch (error) {
     if (error instanceof AuthError) redirect("/sign-in?error=OAuthSignInError");
     throw error;
@@ -44,12 +46,20 @@ async function demoLogin() {
   }
 }
 
+async function clearReferral() {
+  "use server";
+  (await cookies()).delete(REFERRAL_COOKIE);
+  redirect("/sign-in");
+}
+
 export default async function SignInPage({ searchParams }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; referral?: string }>;
 }) {
   if (authConfigured && (await auth())?.user?.id) redirect("/join");
-  const { error } = await searchParams;
+  const { error, referral: referralStatus } = await searchParams;
   const errorMessage = signInErrorMessage(error);
+  const code = verifyReferralCode((await cookies()).get(REFERRAL_COOKIE)?.value, process.env.AUTH_SECRET);
+  const referral = code && process.env.DATABASE_URL ? await getActiveReferral(getDb(), code) : null;
   const showDemo = localDemoEnabled() && isLoopbackHost((await headers()).get("host"));
   const showHostedPreview = Boolean(process.env.VERCEL);
   return (
@@ -63,6 +73,11 @@ export default async function SignInPage({ searchParams }: {
         <h1>Good to see you.</h1>
         <p className={styles.intro}>Sign in to start making more meaningful connections.</p>
         {errorMessage && <p className={styles.error} role="alert">{errorMessage}</p>}
+        {referralStatus === "invalid" && <p className={styles.error} role="status">This invitation link is invalid or no longer active.</p>}
+        {referral && <div className={styles.referral}>
+          <p>Invited by <strong>{referral.label}</strong>. If you create an account, your signup will be counted for this invitation.</p>
+          <form action={clearReferral}><button type="submit">Remove invitation</button></form>
+        </div>}
         {showDemo && <div className={styles.demo}>
           <form action={demoLogin}><button className={styles.demoButton} type="submit">Try the local demo</button></form>
           <p>Explore with sample profiles. Starting the demo creates a fresh session on this device.</p>

@@ -1,17 +1,22 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createSign, generateKeyPairSync } from "node:crypto";
+import { inspect } from "node:util";
 import { Auth, customFetch, type AuthConfig } from "@auth/core";
-import { authCallbacks, googleProvider, localAuthCookies } from "../src/lib/auth-config.ts";
+import { createAuthCallbacks, googleProvider, localAuthCookies } from "../src/lib/auth-config.ts";
 
 // This exercises Auth.js in process with a fake Google token endpoint. No
 // network request or real Google account/credential is involved.
-test("mock Google OAuth returns a private stable session and rejects a bad nonce", async () => {
+test("mock Google OAuth registers only after validation and fails closed on storage errors", async () => {
   const origin = "http://127.0.0.1:3391";
   const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
   let expectedNonce = "";
   let expectedVerifierChallenge = "";
   let issueBadNonce = false;
+  let failRegistration = false;
+  let referralReads = 0;
+  const registrations: { userId: string; referralCode: string | null }[] = [];
+  const loggedErrors: unknown[] = [];
   const provider = googleProvider("test-client", "test-secret");
   provider.options = { ...provider.options,
     [customFetch]: async (input, init) => {
@@ -48,12 +53,22 @@ test("mock Google OAuth returns a private stable session and rejects a bad nonce
       return Response.json({ access_token: "disposable-token", token_type: "Bearer", id_token: idToken });
     },
   };
+  const callbacks = createAuthCallbacks({
+    async readPendingReferral() {
+      referralReads++;
+      return "CREATOR";
+    },
+    async registerGoogleAccount(userId, referralCode) {
+      registrations.push({ userId, referralCode });
+      if (failRegistration) throw new Error("Private storage failure details");
+    },
+  });
   const config = {
     secret: "a-disposable-test-secret-that-is-long-enough", trustHost: true, basePath: "/api/auth",
-    providers: [provider], callbacks: authCallbacks, session: { strategy: "jwt" },
+    providers: [provider], callbacks, session: { strategy: "jwt" },
     cookies: localAuthCookies,
     pages: { signIn: "/sign-in", error: "/sign-in" },
-    logger: { error() {}, warn() {}, debug() {} },
+    logger: { error(error) { loggedErrors.push(error); }, warn() {}, debug() {} },
   } satisfies AuthConfig;
 
   async function start() {
@@ -83,6 +98,8 @@ test("mock Google OAuth returns a private stable session and rejects a bad nonce
     headers: { cookie: first.cookies },
   }), config);
   assert.equal(callback.headers.get("location"), `${origin}/join`);
+  assert.equal(referralReads, 1);
+  assert.deepEqual(registrations, [{ userId: "google:stable-google-subject", referralCode: "CREATOR" }]);
   const sessionCookie = callback.headers.getSetCookie().find((value) => value.startsWith(`${localAuthCookies.sessionToken.name}=`));
   assert.ok(sessionCookie);
   const sessionResponse = await Auth(new Request(`${origin}/api/auth/session`, {
@@ -100,6 +117,8 @@ test("mock Google OAuth returns a private stable session and rejects a bad nonce
   }), config);
   assert.match(rejected.headers.get("location") ?? "", /^http:\/\/127\.0\.0\.1:3391\/sign-in\?error=/);
   assert.equal(rejected.headers.getSetCookie().some((value) => value.startsWith(`${localAuthCookies.sessionToken.name}=`)), false);
+  assert.equal(referralReads, 1);
+  assert.equal(registrations.length, 1);
 
   issueBadNonce = false;
   const third = await start();
@@ -108,4 +127,33 @@ test("mock Google OAuth returns a private stable session and rejects a bad nonce
   }), config);
   assert.match(badState.headers.get("location") ?? "", /^http:\/\/127\.0\.0\.1:3391\/sign-in\?error=/);
   assert.equal(badState.headers.getSetCookie().some((value) => value.startsWith(`${localAuthCookies.sessionToken.name}=`)), false);
+  assert.equal(referralReads, 1);
+  assert.equal(registrations.length, 1);
+
+  const fourth = await start();
+  const invalidVerifier = fourth.cookies.split("; ").map((value) =>
+    value.startsWith(`${localAuthCookies.pkceCodeVerifier.name}=`)
+      ? `${localAuthCookies.pkceCodeVerifier.name}=invalid`
+      : value,
+  ).join("; ");
+  const badPkce = await Auth(new Request(`${origin}/api/auth/callback/google?${new URLSearchParams({ code: "disposable-code", state: fourth.state })}`, {
+    headers: { cookie: invalidVerifier },
+  }), config);
+  assert.match(badPkce.headers.get("location") ?? "", /^http:\/\/127\.0\.0\.1:3391\/sign-in\?error=/);
+  assert.equal(badPkce.headers.getSetCookie().some((value) => value.startsWith(`${localAuthCookies.sessionToken.name}=`)), false);
+  assert.equal(referralReads, 1);
+  assert.equal(registrations.length, 1);
+
+  failRegistration = true;
+  const fifth = await start();
+  const previousErrors = loggedErrors.length;
+  const failedRegistration = await Auth(new Request(`${origin}/api/auth/callback/google?${new URLSearchParams({ code: "disposable-code", state: fifth.state })}`, {
+    headers: { cookie: fifth.cookies },
+  }), config);
+  assert.match(failedRegistration.headers.get("location") ?? "", /^http:\/\/127\.0\.0\.1:3391\/sign-in\?error=/);
+  assert.equal(failedRegistration.headers.getSetCookie().some((value) => value.startsWith(`${localAuthCookies.sessionToken.name}=`)), false);
+  assert.equal(referralReads, 2);
+  assert.deepEqual(registrations[1], { userId: "google:stable-google-subject", referralCode: "CREATOR" });
+  assert.ok(loggedErrors.length > previousErrors);
+  assert.doesNotMatch(inspect(loggedErrors.slice(previousErrors), { depth: 8 }), /Private storage failure details/);
 });

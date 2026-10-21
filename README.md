@@ -1,14 +1,12 @@
 # Mystery Match
 
-A local-first Next.js prototype for getting to know someone before seeing their photo. Adults can create a nickname, answer optional connection-preference questions, receive blind introductions, and open a private chat after both people choose each other.
+A Next.js prototype for getting to know someone before seeing their photo. Adults can create a nickname, answer connection-preference questions, receive blind introductions, and open a private chat after both people choose each other.
 
-The [Vercel preview](https://mystery-match-ani.vercel.app) includes a fictional, account-free demo. Real matching, profiles, and chat still depend on a local SQLite file, and Google sign-in is disabled on Vercel until hosted storage is implemented. This is not ready for a public launch.
+The [Vercel preview](https://mystery-match-ani.vercel.app) includes a fictional, account-free demo. The application now uses Neon Postgres for persistent profiles, matching, chat, referrals, and opt-in analytics. Google OAuth has not yet been configured or tested end to end, and the Neon-backed code and environment must be deployed before relying on those features in the preview. This is not ready for a public launch.
 
 ## Run locally
 
-Requires Node.js 22.18+ or 24+ and npm. Node's built-in SQLite module may print an experimental warning.
-
-For a fresh checkout without an `.env.local` file:
+Requires Node.js 22.18+ or 24+ and npm, plus a Neon Postgres database. For a fresh checkout:
 
 ```bash
 npm install
@@ -16,49 +14,80 @@ cp .env.example .env.local
 openssl rand -base64 32
 ```
 
-Paste the generated value into `AUTH_SECRET` in `.env.local`, then run:
+Put the generated value in `AUTH_SECRET` in `.env.local`. Set `DATABASE_URL` to the **pooled** Neon connection string for the app and `DATABASE_URL_UNPOOLED` to the **direct/unpooled** connection string for the same database. Keep both URLs and `AUTH_SECRET` private; `.env.local` is ignored by Git. Existing shell environment variables take precedence over the file, so make sure they point to the intended database. Apply the schema before starting the app:
 
 ```bash
+npm run db:migrate
 npm run dev
 ```
 
-Open the local address printed by Next.js. The development server binds to `127.0.0.1` and starts at port 3000; if that port is busy, Next.js selects another. To choose a port explicitly, use `npm run dev -- -p 3002`.
+The migration command reads `DATABASE_URL_UNPOOLED`, applies pending files in `migrations/`, and checks previously applied migration checksums. The development server binds to `127.0.0.1` and starts at port 3000; if that port is busy, Next.js selects another. To choose a port explicitly, use `npm run dev -- -p 3002`.
 
 ## Try the demo
 
-On the hosted preview, choose **Try the demo** to walk through the sample flow without an account. Introductions, messages, and analytics are illustrative; the demo runs in the browser and resets when the page is refreshed.
+On the hosted preview, choose **Try the demo** to walk through a fictional, account-free flow. Its introductions, messages, and analytics are illustrative; the browser demo resets when the page is refreshed.
 
 On the local sign-in page, choose **Try the local demo** to start a fresh session without Google credentials. In the profile wizard, **Explore with a sample profile** takes you straight to fictional introductions. To walk through the questions, choose **Use sample answers and review the questions**, or enter your own answers. Say hello to a sample introduction to open a mutual match and go directly to its conversation; messages receive a scripted sample reply. The **Sample analytics** link shows illustrative numbers, not live activity. Signing out and starting a new demo creates a fresh session.
 
-The local sign-in demo is available only in development on a loopback address and requires the local `AUTH_SECRET`. Sample profiles are private to their demo session and are never shown to ordinary accounts. Demo activity is excluded from real analytics. Demo profiles and conversations are stored locally in the same database as other local data.
+The local sign-in demo is available only in development on a loopback address and needs `AUTH_SECRET` and a migrated database. Although the demo runs locally, its demo profiles and conversations are stored in the configured Neon database. Sample profiles are private to their demo session and are never shown to ordinary accounts; demo activity is excluded from real analytics. Use a separate development database if you do not want demo data mixed with other data.
 
 With `LOCAL_TEST_LOGIN=true`, expand **Use a local test account** on the sign-in page for development-only test accounts. Enter a new handle and a passphrase of at least eight characters to create one; use the same passphrase to return. To try a match, create a second account in a separate browser profile or private window, give each account mutually compatible age and gender preferences, answer at least three of the same questions, and choose “Say hello” from both accounts. A conversation appears for both people. Chats refresh about every five seconds. Blocking someone closes the room for both people.
 
-Local profiles, messages, and settings are stored in `.local/closer.sqlite` on this computer. Keep that file private: chat messages and profiles are not end-to-end encrypted. `SQLITE_PATH` can optionally point to a different local database file. Local test accounts are disabled outside development.
+Profiles, messages, and settings are stored in the configured hosted database. Restrict database access and protect its credentials; chat messages and profiles are not end-to-end encrypted. Local test accounts are disabled outside development.
 
 ## Google sign-in
 
-Google sign-in is wired up but requires your own OAuth credentials. For local and Vercel configuration, including troubleshooting, see [Set up Google sign-in](docs/google-auth.md). To use it locally:
+Google sign-in is implemented but its OAuth client has not yet been configured or tested end to end. It requires a migrated database, an `AUTH_SECRET`, and Google OAuth credentials. For setup and troubleshooting, see [Set up Google sign-in](docs/google-auth.md).
 
-1. In [Google Cloud](https://console.cloud.google.com/), configure the OAuth consent screen and create an OAuth client of type **Web application**. Add your Google account as a test user if the app's audience is still in testing.
-2. Add an authorized redirect URI matching the exact local address and port you use, followed by `/api/auth/callback/google`. For example, if the server prints `http://127.0.0.1:3002`, use `http://127.0.0.1:3002/api/auth/callback/google`.
-3. Put the client ID and secret in `AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET` in `.env.local`, then restart the server.
+For local development, create a Google OAuth **Web application** client, add your Google account as a test user if the app is in testing, and register the exact callback URL for your local host and port, such as `http://127.0.0.1:3002/api/auth/callback/google`. Add the client ID and secret as `AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET` in `.env.local` and restart. Leave `AUTH_URL` and `NEXTAUTH_URL` unset for this local setup. Google identity details are not shown in blind introductions; the application uses the provider subject to associate the login with the account.
 
-Leave `AUTH_URL` and `NEXTAUTH_URL` unset for this local setup. Google requires an exact redirect URI match; localhost IP addresses are allowed for local HTTP development. See [Google's OAuth setup guide](https://developers.google.com/identity/openid-connect/openid-connect) and [redirect URI rules](https://developers.google.com/identity/protocols/oauth2/web-server#redirect-uri_validation_rules). Google identity details are not shown in blind introductions; the application uses a provider subject to associate the login with the local account.
+## Influencer referrals
+
+Create and manage invitation codes from a trusted operator environment with `DATABASE_URL` set. Set `APP_URL` to the public HTTPS origin, or a loopback HTTP origin for local testing; it determines the invitation and QR destinations.
+
+```bash
+npm run referrals -- create CREATOR1 "Influencer name"
+npm run referrals -- list
+npm run referrals -- disable CREATOR1
+npm run referrals -- enable CREATOR1
+```
+
+The create command prints an invitation link at `/r/CREATOR1` and a QR image at `/r/CREATOR1/qr`. Codes are 3–32 letters, numbers, hyphens, or underscores, beginning with a letter or number; they are normalized to uppercase. A visitor can remove an invitation before signing in. The first valid invitation is held for up to 30 days and is credited only when a Google account is first registered while the code remains active. Returning Google accounts, local test accounts, and demo sessions do not create referral signups. The list command separately shows attributed Google signups and how many subsequently created a profile; it does not count link clicks.
+
+Referral attribution is stored separately from opt-in usage analytics and associates the account ID with a code. The operator CLI shows exact counts without the analytics dashboard's small-group suppression; there is no influencer-facing reporting portal. Share these counts and protect database access accordingly.
 
 ## Matching and analytics
 
 The six-question questionnaire encodes stated preferences into a versioned numeric vector. Introductions require mutually compatible age and gender preferences, at least three shared answers, and no block or pass. Similarity ranks eligible introductions; it is not a clinical assessment or a prediction of relationship success.
 
-Analytics is off by default. A member can opt in during onboarding and later change that choice at `/analytics/consent`. Aggregate reports at `/analytics` require the member's internal account ID in the comma-separated server environment variable `ANALYTICS_ADMIN_USER_IDS`. To find local account IDs on your own machine, use `sqlite3 .local/closer.sqlite 'SELECT user_id, alias FROM profiles;'`, add the relevant ID to `.env.local`, and restart. Reports cover the previous completed UTC week, use only opted-in activity, and suppress small groups. Pair-related events are recorded only when both people opt in. Turning consent off deletes the member's events and clears pair-derived event types for everyone. Events older than 90 days are pruned when analytics is written or read; there is no idle-time cleanup scheduler. See [the analytics contract](src/app/analytics/ANALYTICS.md) for details.
+Analytics is off by default. A member can opt in during onboarding and later change that choice at `/analytics/consent`. Aggregate reports at `/analytics` require the member's internal account ID in the comma-separated server environment variable `ANALYTICS_ADMIN_USER_IDS`. An operator can find the appropriate ID in the database's restricted SQL console, for example with `SELECT user_id, alias FROM profiles;`; add the ID to the server environment and restart or redeploy. Reports cover the previous completed UTC week, use only opted-in activity, and suppress small groups. Pair-related events are recorded only when both people opt in. When a real member withdraws previously granted consent, their events are deleted and pair-derived event types are cleared for everyone. Events older than 90 days are pruned on standalone analytics writes or report reads; there is no idle-time cleanup scheduler. See [the analytics contract](src/app/analytics/ANALYTICS.md) for details.
 
 ## Checks
 
+The integration tests delete data. Create a separate disposable Postgres database whose name begins `mm_test_`, with the rest of the name made up of letters, numbers, or underscores. Put its pooled `DATABASE_URL` and matching direct `DATABASE_URL_UNPOOLED` in an ignored `.env.test.local` file. Apply the migrations to that test database, then run the suite serially:
+
 ```bash
-npm test
+env -u DATABASE_URL -u DATABASE_URL_UNPOOLED node --env-file=.env.test.local scripts/migrate.mjs
+env -u DATABASE_URL -u DATABASE_URL_UNPOOLED node --env-file=.env.test.local --test --test-concurrency=1 tests/*.test.ts
 npm run typecheck
 npm run lint
 npm run build
 ```
 
-Before a public launch, the local SQLite design needs a hosted persistent database and a production security, privacy, moderation, account-deletion, and operations review. Ages are self-reported; no identity or age verification is implemented.
+Do not run database tests against production or any database containing data you need. The test database must already have the migrations applied; the scripts do not create a Neon database for you. `npm test` uses the `DATABASE_URL` in its process environment and does not load `.env.local` itself.
+
+To exercise the built app over HTTP, start it with the test database and a disposable secret in one terminal:
+
+```bash
+env -u DATABASE_URL -u DATABASE_URL_UNPOOLED AUTH_SECRET=disposable-local-test-secret AUTH_TRUST_HOST=true APP_URL=http://127.0.0.1:3015 node --env-file=.env.test.local node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3015
+```
+
+Then run the end-to-end check in another terminal:
+
+```bash
+env -u DATABASE_URL -u DATABASE_URL_UNPOOLED AUTH_SECRET=disposable-local-test-secret APP_URL=http://127.0.0.1:3015 node --env-file=.env.test.local scripts/e2e-neon.mjs
+```
+
+The check decodes a QR image and exercises referral attribution, profile creation, matching, chat, and analytics consent using simulated identities. It does not sign in to a real Google account.
+
+Before a public launch, the app still needs a production security, privacy, moderation, account-deletion, and operations review. Ages are self-reported; no identity or age verification is implemented.

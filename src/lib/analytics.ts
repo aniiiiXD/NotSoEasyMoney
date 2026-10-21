@@ -1,10 +1,10 @@
-import { getDb } from "./db.ts";
+import type { PoolClient } from "pg";
+import { getDb, lockProfiles, withTransaction } from "./db.ts";
 
 /**
- * Local, server-only analytics. The caller must supply the authenticated actor
- * from the server session, never a user ID from the request body. There is no
- * properties argument: message content, profile data, and matching data cannot
- * be added to an event. Events are recorded at most once per user and UTC day.
+ * Server-only analytics. Callers must use the authenticated session's user ID,
+ * never an ID supplied in request JSON. There is no properties argument: events
+ * contain no message, profile, or matching data and are unique per UTC day.
  */
 export const ANALYTICS_EVENTS = [
   "signed_in",
@@ -14,6 +14,7 @@ export const ANALYTICS_EVENTS = [
 ] as const;
 
 export type AnalyticsEvent = (typeof ANALYTICS_EVENTS)[number];
+type RoomAnalyticsEvent = "message_sent" | "match_created";
 
 const eventNames = new Set<string>(ANALYTICS_EVENTS);
 const minimumCohort = 20;
@@ -64,131 +65,204 @@ export function isAnalyticsAdmin(userId: unknown): boolean {
 }
 
 /**
- * Remove local events older than 90 days. This runs on analytics writes and
- * report reads; call it from a scheduled local maintenance job when an expiry
- * deadline must be enforced even if the app receives no traffic.
+ * Remove events older than 90 days. Report reads and standalone event writes
+ * call this opportunistically. Schedule it separately to enforce expiry while
+ * the app is idle or only transaction-scoped product events are being recorded.
  */
-export function pruneAnalyticsEvents(): number {
-  const result = getDb()
-    .prepare(
-      "DELETE FROM analytics_events WHERE occurred_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-90 days')",
-    )
-    .run();
-  return Number(result.changes);
+export async function pruneAnalyticsEvents(): Promise<number> {
+  const result = await getDb().query(
+    `DELETE FROM analytics_events
+      WHERE occurred_at < to_char((clock_timestamp() - interval '90 days') AT TIME ZONE 'UTC',
+                                   'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
+  );
+  return result.rowCount ?? 0;
 }
 
 /**
- * Record an allowlisted event only when the actor has explicitly opted in.
- * It never throws into the product flow if analytics storage fails.
+ * A failed analytics statement must not poison an enclosing product transaction.
+ * Roll back only the optional work. If the savepoint or rollback itself fails,
+ * propagate the error: the connection cannot safely commit the product change.
+ * Calls on the same client must be awaited sequentially, not run in parallel.
  */
-export function recordEvent(userId: string, event: AnalyticsEvent): boolean {
+async function optionalAnalytics(client: PoolClient, action: () => Promise<boolean>): Promise<boolean> {
+  await client.query("SAVEPOINT optional_analytics");
+  try {
+    const recorded = await action();
+    await client.query("RELEASE SAVEPOINT optional_analytics");
+    return recorded;
+  } catch {
+    await client.query("ROLLBACK TO SAVEPOINT optional_analytics");
+    await client.query("RELEASE SAVEPOINT optional_analytics");
+    return false;
+  }
+}
+
+/**
+ * Record a single-person event inside the product transaction. The caller should
+ * hold the actor's profile lock and call this after the product write. Checking
+ * consent before that transaction commits avoids capturing pre-consent activity
+ * if consent changes while a post-commit callback is waiting to run.
+ */
+export async function recordEventInTransaction(
+  client: PoolClient,
+  userId: string,
+  event: AnalyticsEvent,
+): Promise<boolean> {
+  if (!isValidUserId(userId) || isSampleUserId(userId) || !eventNames.has(event)) return false;
+  return optionalAnalytics(client, async () => {
+    await lockProfiles(client, [userId]);
+    const result = await client.query(
+      `INSERT INTO analytics_events (user_id, event_name, occurred_at, metadata)
+       SELECT p.user_id, $2,
+              to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD') || 'T00:00:00.000Z', '{}'
+         FROM profiles AS p
+        WHERE p.user_id = $1 AND p.analytics_consent = 1
+       ON CONFLICT DO NOTHING`,
+      [userId, event],
+    );
+    return result.rowCount === 1;
+  });
+}
+
+/**
+ * Standalone event, such as a completed sign-in. Optional analytics failures
+ * never interrupt the product flow. Product writes should instead call the
+ * transaction-scoped helper before they commit.
+ */
+export async function recordEvent(userId: string, event: AnalyticsEvent): Promise<boolean> {
   if (!isValidUserId(userId) || isSampleUserId(userId) || !eventNames.has(event)) return false;
   try {
-    pruneAnalyticsEvents();
-    const result = getDb()
-      .prepare(
-        `INSERT INTO analytics_events (user_id, event_name, occurred_at, metadata)
-         SELECT p.user_id, ?, strftime('%Y-%m-%dT00:00:00.000Z', 'now'), '{}'
-           FROM profiles AS p
-          WHERE p.user_id = ? AND p.analytics_consent = 1
-            AND NOT EXISTS (
-              SELECT 1 FROM analytics_events AS e
-               WHERE e.user_id = p.user_id AND e.event_name = ?
-                 AND e.occurred_at >= strftime('%Y-%m-%dT00:00:00.000Z', 'now')
-                 AND e.occurred_at < strftime('%Y-%m-%dT00:00:00.000Z', 'now', '+1 day')
-            )`,
-      )
-      .run(event, userId, event);
-    return Number(result.changes) === 1;
-  } catch {
-    // Analytics is optional and must never break sign-in, chat, or onboarding.
-    return false;
-  }
-}
-
-function recordRoomEvent(userId: string, roomId: string, event: "message_sent" | "match_created"): boolean {
-  if (!isValidUserId(userId) || isSampleUserId(userId) || !isValidUserId(roomId)) return false;
-  try {
-    pruneAnalyticsEvents();
-    const result = getDb()
-      .prepare(
-        `INSERT INTO analytics_events (user_id, event_name, occurred_at, metadata)
-         SELECT actor.user_id, ?, strftime('%Y-%m-%dT00:00:00.000Z', 'now'), '{}'
-           FROM rooms AS room
-           JOIN profiles AS actor ON actor.user_id = ?
-           JOIN profiles AS other ON other.user_id = CASE
-             WHEN room.user_a = actor.user_id THEN room.user_b ELSE room.user_a END
-          WHERE room.id = ? AND room.active = 1
-            AND (room.user_a = actor.user_id OR room.user_b = actor.user_id)
-            AND actor.analytics_consent = 1 AND other.analytics_consent = 1
-            AND other.user_id NOT LIKE 'demo:%' AND other.user_id NOT LIKE 'sample:%'
-            AND NOT EXISTS (
-              SELECT 1 FROM analytics_events AS e
-               WHERE e.user_id = actor.user_id AND e.event_name = ?
-                 AND e.occurred_at >= strftime('%Y-%m-%dT00:00:00.000Z', 'now')
-                 AND e.occurred_at < strftime('%Y-%m-%dT00:00:00.000Z', 'now', '+1 day')
-            )`,
-      )
-      .run(event, userId, roomId, event);
-    return Number(result.changes) === 1;
+    await pruneAnalyticsEvents();
+    return await withTransaction(getDb(), (client) => recordEventInTransaction(client, userId, event));
   } catch {
     return false;
   }
 }
 
 /**
- * Called only after a message is stored. Checks actual room membership and
- * both participants' current consent in the insertion statement. The room,
- * other participant, and message are never stored with the resulting event.
+ * Record pair-derived activity in the same transaction as the product write.
+ * Call after the message/new-room write while the two participants' profile
+ * locks are held. Only the actor and UTC day are stored, never the other member,
+ * room, or message. This helper rechecks membership, active room and both
+ * consents under the same profile locks used by consent withdrawal.
  */
-export function recordMessageEvent(userId: string, roomId: string): boolean {
+export async function recordRoomEventInTransaction(
+  client: PoolClient,
+  userId: string,
+  roomId: string,
+  event: RoomAnalyticsEvent,
+): Promise<boolean> {
+  if (
+    !isValidUserId(userId) || isSampleUserId(userId) || !isValidUserId(roomId) ||
+    (event !== "message_sent" && event !== "match_created")
+  ) return false;
+
+  return optionalAnalytics(client, async () => {
+    // Discover the pair without locking the room, then lock profiles first in
+    // canonical order. Product operations use the same profiles-before-room order.
+    const roomResult = await client.query<{ user_a: string; user_b: string }>(
+      `SELECT user_a, user_b FROM rooms
+        WHERE id = $1 AND active = 1 AND (user_a = $2 OR user_b = $2)`,
+      [roomId, userId],
+    );
+    const room = roomResult.rows[0];
+    if (!room) return false;
+    const otherId = room.user_a === userId ? room.user_b : room.user_a;
+    if (!isValidUserId(otherId) || isSampleUserId(otherId)) return false;
+    await lockProfiles(client, [userId, otherId]);
+
+    // Recheck the room under a row lock after taking the participant locks.
+    const activeRoom = await client.query(
+      `SELECT 1 FROM rooms
+        WHERE id = $1 AND active = 1
+          AND ((user_a = $2 AND user_b = $3) OR (user_a = $3 AND user_b = $2))
+        FOR SHARE`,
+      [roomId, userId, otherId],
+    );
+    if (activeRoom.rowCount !== 1) return false;
+
+    const result = await client.query(
+      `INSERT INTO analytics_events (user_id, event_name, occurred_at, metadata)
+       SELECT actor.user_id, $3,
+              to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD') || 'T00:00:00.000Z', '{}'
+         FROM profiles AS actor
+         JOIN profiles AS other ON other.user_id = $2
+        WHERE actor.user_id = $1 AND actor.analytics_consent = 1 AND other.analytics_consent = 1
+       ON CONFLICT DO NOTHING`,
+      [userId, otherId, event],
+    );
+    return result.rowCount === 1;
+  });
+}
+
+/**
+ * Standalone wrappers are useful for isolated tests. Production message and
+ * match flows use recordRoomEventInTransaction so consent is checked at the
+ * instant of the product write, without a post-commit consent race.
+ */
+async function recordRoomEvent(userId: string, roomId: string, event: RoomAnalyticsEvent): Promise<boolean> {
+  if (!isValidUserId(userId) || isSampleUserId(userId) || !isValidUserId(roomId)) return false;
+  try {
+    await pruneAnalyticsEvents();
+    return await withTransaction(getDb(), (client) => recordRoomEventInTransaction(client, userId, roomId, event));
+  } catch {
+    return false;
+  }
+}
+
+export async function recordMessageEvent(userId: string, roomId: string): Promise<boolean> {
   return recordRoomEvent(userId, roomId, "message_sent");
 }
 
-/** Called once for each participant, after a new room is committed. */
-export function recordMatchEvent(userId: string, roomId: string): boolean {
+export async function recordMatchEvent(userId: string, roomId: string): Promise<boolean> {
   return recordRoomEvent(userId, roomId, "match_created");
 }
 
 /** Returns null when the authenticated user has not yet created a profile. */
-export function getAnalyticsConsent(userId: string): boolean | null {
+export async function getAnalyticsConsent(userId: string): Promise<boolean | null> {
   if (!isValidUserId(userId)) return null;
-  const row = getDb()
-    .prepare("SELECT analytics_consent FROM profiles WHERE user_id = ?")
-    .get(userId) as { analytics_consent: number } | undefined;
-  return row ? row.analytics_consent === 1 : null;
+  const result = await getDb().query<{ analytics_consent: number }>(
+    "SELECT analytics_consent FROM profiles WHERE user_id = $1",
+    [userId],
+  );
+  return result.rows[0] ? result.rows[0].analytics_consent === 1 : null;
 }
 
-/** Changing consent and deleting withdrawn data happen in one SQLite transaction. */
-export function setAnalyticsConsent(userId: string, enabled: boolean): boolean {
+function isRetryableTransactionError(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error &&
+    (error.code === "40P01" || error.code === "40001");
+}
+
+/** Changing consent and deleting withdrawn data happen in one transaction. */
+export async function setAnalyticsConsent(userId: string, enabled: boolean): Promise<boolean> {
   if (!isValidUserId(userId) || typeof enabled !== "boolean") return false;
-  const db = getDb();
-  db.exec("BEGIN IMMEDIATE");
-  try {
-    const previous = db.prepare("SELECT analytics_consent FROM profiles WHERE user_id = ?").get(userId) as
-      | { analytics_consent: number }
-      | undefined;
-    const result = db
-      .prepare("UPDATE profiles SET analytics_consent = ? WHERE user_id = ?")
-      .run(enabled ? 1 : 0, userId);
-    if (Number(result.changes) !== 1) {
-      db.exec("ROLLBACK");
-      return false;
+  // Concurrent withdrawals can encounter a PostgreSQL deadlock during the
+  // global pair-event purge. A rejected transaction changes nothing; retry it
+  // in a fresh transaction, while surfacing unrelated failures to the caller.
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await withTransaction(getDb(), async (client) => {
+        await lockProfiles(client, [userId]);
+        const previous = await client.query<{ analytics_consent: number }>(
+          "SELECT analytics_consent FROM profiles WHERE user_id = $1",
+          [userId],
+        );
+        if (!previous.rows[0]) return false;
+
+        await client.query("UPDATE profiles SET analytics_consent = $2 WHERE user_id = $1", [userId, enabled ? 1 : 0]);
+        if (!enabled) {
+          await client.query("DELETE FROM analytics_events WHERE user_id = $1", [userId]);
+          // Pair identities are not kept in analytics. A real account's withdrawal
+          // therefore clears all pair-derived events to remove indirect traces.
+          if (previous.rows[0].analytics_consent === 1 && !isSampleUserId(userId)) {
+            await client.query("DELETE FROM analytics_events WHERE event_name IN ('message_sent', 'match_created')");
+          }
+        }
+        return true;
+      });
+    } catch (error) {
+      if (attempt >= 2 || !isRetryableTransactionError(error)) throw error;
     }
-    if (!enabled) {
-      db.prepare("DELETE FROM analytics_events WHERE user_id = ?").run(userId);
-      // We intentionally do not keep pair/room identities in analytics. Thus,
-      // when either participant withdraws, the safe way to remove all possible
-      // indirect traces is to clear the shared pair-derived metrics for everyone.
-      if (previous?.analytics_consent === 1 && !isSampleUserId(userId)) {
-        db.prepare("DELETE FROM analytics_events WHERE event_name IN ('message_sent', 'match_created')").run();
-      }
-    }
-    db.exec("COMMIT");
-    return true;
-  } catch (error) {
-    db.exec("ROLLBACK");
-    throw error;
   }
 }
 
@@ -211,71 +285,75 @@ function metric(count: number, complement?: number): Metric {
   return { status: "available", minimum: Math.floor(count / countBucket) * countBucket };
 }
 
+function countNumber(value: string | number): number {
+  const count = Number(value);
+  if (!Number.isSafeInteger(count) || count < 0) throw new Error("Invalid analytics count");
+  return count;
+}
+
 /**
- * Fixed-week, aggregate-only report. Call using an authenticated server session
- * ID. The check is repeated here so alternate server entry points fail closed.
- * Small cells and their complements are suppressed; counts are rounded down.
+ * Fixed-week aggregate report. The server-only admin check is repeated here so
+ * alternate entry points fail closed. The report's two queries share a snapshot;
+ * small cells and their complements are suppressed, and counts are rounded down.
  */
-export function getAnalyticsReport(userId: string, now: Date = new Date()): AnalyticsReport {
+export async function getAnalyticsReport(userId: string, now: Date = new Date()): Promise<AnalyticsReport> {
   if (!isAnalyticsAdmin(userId)) throw new Error("Analytics access denied");
-  pruneAnalyticsEvents();
+  await pruneAnalyticsEvents();
   const period = lastClosedUtcWeek(now);
   const previousWeekStart = new Date(Date.parse(period.start) - 7 * 86_400_000).toISOString();
-  const row = getDb()
-    .prepare(
+
+  return withTransaction(getDb(), async (client) => {
+    await client.query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY");
+    const { rows: [row] } = await client.query<{
+      active: string; signed_in: string; messaging: string; matched: string; onboarding: string;
+    }>(
       `SELECT COUNT(DISTINCT user_id) AS active,
               COUNT(DISTINCT CASE WHEN event_name = 'signed_in' THEN user_id END) AS signed_in,
               COUNT(DISTINCT CASE WHEN event_name = 'message_sent' THEN user_id END) AS messaging,
               COUNT(DISTINCT CASE WHEN event_name = 'match_created' THEN user_id END) AS matched,
               COUNT(DISTINCT CASE WHEN event_name = 'onboarding_completed' THEN user_id END) AS onboarding
          FROM analytics_events
-        WHERE occurred_at >= ? AND occurred_at < ?
+        WHERE occurred_at >= $1 AND occurred_at < $2
           AND event_name IN ('signed_in', 'onboarding_started', 'onboarding_completed',
                              'profile_saved', 'message_sent', 'match_created')`,
-    )
-    .get(period.start, period.end) as {
-    active: number;
-    signed_in: number;
-    messaging: number;
-    matched: number;
-    onboarding: number;
-  };
-  const retention = getDb()
-    .prepare(
+      [period.start, period.end],
+    );
+    const { rows: [retention] } = await client.query<{ eligible: string; retained: string }>(
       `SELECT COUNT(DISTINCT previous.user_id) AS eligible,
               COUNT(DISTINCT CASE WHEN EXISTS (
                 SELECT 1 FROM analytics_events AS current
                  WHERE current.user_id = previous.user_id
-                   AND current.occurred_at >= ? AND current.occurred_at < ?
+                   AND current.occurred_at >= $1 AND current.occurred_at < $2
                    AND current.event_name IN ('signed_in', 'onboarding_started', 'onboarding_completed',
                                               'profile_saved', 'message_sent', 'match_created')
               ) THEN previous.user_id END) AS retained
          FROM analytics_events AS previous
-        WHERE previous.occurred_at >= ? AND previous.occurred_at < ?
+        WHERE previous.occurred_at >= $3 AND previous.occurred_at < $1
           AND previous.event_name IN ('signed_in', 'onboarding_started', 'onboarding_completed',
                                       'profile_saved', 'message_sent', 'match_created')`,
-    )
-    .get(period.start, period.end, previousWeekStart, period.start) as { eligible: number; retained: number };
-  const active = Number(row.active);
-  const signedIn = Number(row.signed_in);
-  const messaging = Number(row.messaging);
-  const matched = Number(row.matched);
-  const onboarding = Number(row.onboarding);
-  const eligible = Number(retention.eligible);
-  const retained = Number(retention.retained);
-  const canShowRetention = retained >= minimumCohort && eligible - retained >= minimumCohort;
-  return {
-    period: { ...period, timezone: "UTC" },
-    status: active === 0 ? "no_data" : active < minimumCohort ? "insufficient_data" : "available",
-    metrics: {
-      activeUsers: metric(active),
-      signedInUsers: metric(signedIn, active - signedIn),
-      messagingUsers: metric(messaging, active - messaging),
-      matchedUsers: metric(matched, active - matched),
-      onboardingCompletedUsers: metric(onboarding, active - onboarding),
-      weeklyRetention: canShowRetention
-        ? { status: "available", percentage: Math.round((retained / eligible) * 20) * 5 }
-        : { status: "insufficient_data", percentage: null },
-    },
-  };
+      [period.start, period.end, previousWeekStart],
+    );
+    const active = countNumber(row.active);
+    const signedIn = countNumber(row.signed_in);
+    const messaging = countNumber(row.messaging);
+    const matched = countNumber(row.matched);
+    const onboarding = countNumber(row.onboarding);
+    const eligible = countNumber(retention.eligible);
+    const retained = countNumber(retention.retained);
+    const canShowRetention = retained >= minimumCohort && eligible - retained >= minimumCohort;
+    return {
+      period: { ...period, timezone: "UTC" },
+      status: active === 0 ? "no_data" : active < minimumCohort ? "insufficient_data" : "available",
+      metrics: {
+        activeUsers: metric(active),
+        signedInUsers: metric(signedIn, active - signedIn),
+        messagingUsers: metric(messaging, active - messaging),
+        matchedUsers: metric(matched, active - matched),
+        onboardingCompletedUsers: metric(onboarding, active - onboarding),
+        weeklyRetention: canShowRetention
+          ? { status: "available", percentage: Math.round((retained / eligible) * 20) * 5 }
+          : { status: "insufficient_data", percentage: null },
+      },
+    };
+  });
 }

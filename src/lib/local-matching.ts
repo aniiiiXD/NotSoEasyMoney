@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
-import type { DatabaseSync } from "node:sqlite";
+import { Buffer } from "node:buffer";
+import type { Pool, PoolClient } from "pg";
+import { recordEventInTransaction, recordRoomEventInTransaction } from "./analytics.ts";
+import { lockProfiles, withTransaction } from "./db.ts";
 import { isEligiblePair, rankCandidates, type Candidate, type MatchingProfile } from "./matching.ts";
 import { normalizeAnswers, parsePersonalityAnswers, QUESTIONNAIRE_VERSION, type PersonalityAnswers, type PersonalityVector } from "./personality.ts";
 import { isDemoViewer, isReservedDemoIdentity, isSampleForViewer, sameMatchingPool, sampleId, SAMPLE_PROFILES } from "./demo.ts";
@@ -37,6 +40,11 @@ function isGender(value: unknown): value is Gender {
   return typeof value === "string" && (GENDERS as readonly string[]).includes(value);
 }
 
+// Compare UTF-8 bytes, matching PostgreSQL's C collation for user IDs.
+function compareUserIds(a: string, b: string): number {
+  return Buffer.compare(Buffer.from(a), Buffer.from(b));
+}
+
 /** Validate data at the server boundary; client-side validation is not trusted. */
 export function parseProfileInput(value: unknown): ProfileInput {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError("Profile details are required.");
@@ -53,61 +61,66 @@ export function parseProfileInput(value: unknown): ProfileInput {
   return { alias, age: input.age as number, gender: input.gender, seeking: input.seeking, minAge: input.minAge as number, maxAge: input.maxAge as number, answers, analyticsConsent: input.analyticsConsent };
 }
 
-function getRow(db: DatabaseSync, userId: string): ProfileRow | null {
-  return (db.prepare("SELECT * FROM profiles WHERE user_id = ?").get(userId) as unknown as ProfileRow | undefined) ?? null;
+type Database = Pool | PoolClient;
+
+async function getRow(db: Database, userId: string): Promise<ProfileRow | null> {
+  const result = await db.query<ProfileRow>("SELECT * FROM profiles WHERE user_id = $1", [userId]);
+  return result.rows[0] ?? null;
 }
 
 /** Only call for the authenticated person's own profile. */
-export function getOwnProfile(db: DatabaseSync, userId: string): ProfileInput | null {
-  const row = getRow(db, userId);
+export async function getOwnProfile(db: Database, userId: string): Promise<ProfileInput | null> {
+  const row = await getRow(db, userId);
   if (!row) return null;
   return { alias: row.alias, age: row.age, gender: row.gender as Gender, seeking: JSON.parse(row.seeking), minAge: row.min_age, maxAge: row.max_age, answers: JSON.parse(row.answers), analyticsConsent: row.analytics_consent === 1 };
 }
 
-export function saveProfile(db: DatabaseSync, userId: string, value: unknown): { created: boolean } {
+export async function saveProfile(db: Pool, userId: string, value: unknown): Promise<{ created: boolean }> {
   const profile = parseProfileInput(value);
   const vector = normalizeAnswers(profile.answers);
-  db.exec("BEGIN IMMEDIATE");
-  try {
-    const previousProfile = getRow(db, userId);
-    const created = !previousProfile;
-    db.prepare(`INSERT INTO profiles (user_id, alias, age, gender, seeking, min_age, max_age, answers, vector, questionnaire_version, analytics_consent)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(user_id) DO UPDATE SET alias=excluded.alias, age=excluded.age, gender=excluded.gender,
-      seeking=excluded.seeking, min_age=excluded.min_age, max_age=excluded.max_age, answers=excluded.answers,
-      vector=excluded.vector, questionnaire_version=excluded.questionnaire_version,
-      updated_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`).run(userId, profile.alias, profile.age, profile.gender, JSON.stringify(profile.seeking), profile.minAge, profile.maxAge, JSON.stringify(profile.answers), JSON.stringify(vector), QUESTIONNAIRE_VERSION, profile.analyticsConsent ? 1 : 0);
+  return withTransaction(db, async (client) => {
+    // All pair-sensitive operations use this same order for profile locks.
+    await lockProfiles(client, [userId]);
+    const values = [userId, profile.alias, profile.age, profile.gender, JSON.stringify(profile.seeking), profile.minAge, profile.maxAge, JSON.stringify(profile.answers), JSON.stringify(vector), QUESTIONNAIRE_VERSION, profile.analyticsConsent ? 1 : 0];
+    const inserted = await client.query(`INSERT INTO profiles
+      (user_id, alias, age, gender, seeking, min_age, max_age, answers, vector, questionnaire_version, analytics_consent)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      ON CONFLICT (user_id) DO NOTHING RETURNING user_id`, values);
+    const created = inserted.rowCount === 1;
+    if (!created) {
+      // Only the consent endpoint may change consent after creation. An old
+      // profile form must not silently undo a later opt-out.
+      await client.query(`UPDATE profiles SET alias=$2, age=$3, gender=$4, seeking=$5,
+        min_age=$6, max_age=$7, answers=$8, vector=$9, questionnaire_version=$10,
+        updated_at=$11 WHERE user_id=$1`, [...values.slice(0, 10), new Date().toISOString()]);
+    }
+
     if (isDemoViewer(userId)) {
-      // These samples belong exclusively to this demo session. Make them
-      // compatible with the viewer's preferences without changing any prior
-      // decisions, blocks, or conversations when the viewer edits a profile.
-      const insertSample = db.prepare(`INSERT INTO profiles
-        (user_id, alias, age, gender, seeking, min_age, max_age, answers, vector, questionnaire_version, analytics_consent)
-        VALUES (?, ?, ?, ?, ?, 18, 120, ?, ?, ?, 0)
-        ON CONFLICT(user_id) DO UPDATE SET alias=excluded.alias, age=excluded.age,
-        gender=excluded.gender, seeking=excluded.seeking, min_age=excluded.min_age,
-        max_age=excluded.max_age, answers=excluded.answers, vector=excluded.vector,
-        questionnaire_version=excluded.questionnaire_version,
-        updated_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`);
+      // Samples belong to this demo only. Preserve prior decisions, blocks,
+      // conversations, and consent when the viewer updates their profile.
       for (const sample of SAMPLE_PROFILES) {
-        insertSample.run(sampleId(userId, sample.key), sample.alias, profile.minAge, profile.seeking[0],
-          JSON.stringify([profile.gender]), JSON.stringify(sample.answers), JSON.stringify(normalizeAnswers(sample.answers)), QUESTIONNAIRE_VERSION);
+        await client.query(`INSERT INTO profiles
+          (user_id, alias, age, gender, seeking, min_age, max_age, answers, vector, questionnaire_version, analytics_consent)
+          VALUES ($1, $2, $3, $4, $5, 18, 120, $6, $7, $8, 0)
+          ON CONFLICT (user_id) DO UPDATE SET alias=EXCLUDED.alias, age=EXCLUDED.age,
+          gender=EXCLUDED.gender, seeking=EXCLUDED.seeking, min_age=EXCLUDED.min_age,
+          max_age=EXCLUDED.max_age, answers=EXCLUDED.answers, vector=EXCLUDED.vector,
+          questionnaire_version=EXCLUDED.questionnaire_version, updated_at=$9`,
+        [sampleId(userId, sample.key), sample.alias, profile.minAge, profile.seeking[0],
+          JSON.stringify([profile.gender]), JSON.stringify(sample.answers), JSON.stringify(normalizeAnswers(sample.answers)), QUESTIONNAIRE_VERSION, new Date().toISOString()]);
       }
     }
-    db.prepare("DELETE FROM candidate_tokens WHERE viewer_id = ? OR target_id = ?").run(userId, userId);
-    // After creation, only the consent endpoint can change this setting. This
-    // prevents an old profile form from silently undoing a later opt-out.
-    db.exec("COMMIT");
+    await client.query("DELETE FROM candidate_tokens WHERE viewer_id = $1 OR target_id = $1", [userId]);
+    if (created) {
+      await client.query("UPDATE referral_attributions SET profile_completed_at = now() WHERE user_id = $1 AND profile_completed_at IS NULL", [userId]);
+      await recordEventInTransaction(client, userId, "onboarding_completed");
+    }
+    await recordEventInTransaction(client, userId, "profile_saved");
     return { created };
-  } catch (error) {
-    db.exec("ROLLBACK");
-    throw error;
-  }
+  });
 }
 
-function asMatchingProfile(db: DatabaseSync, row: ProfileRow): MatchingProfile {
-  const blocked = db.prepare("SELECT blocked_id AS id FROM blocks WHERE blocker_id = ?").all(row.user_id) as { id: string }[];
-  const passed = db.prepare("SELECT target_id AS id FROM decisions WHERE actor_id = ? AND decision = 'pass'").all(row.user_id) as { id: string }[];
+function asMatchingProfile(row: ProfileRow, blocked: string[], passed: string[]): MatchingProfile {
   let vector: PersonalityVector;
   let seeking: string[];
   try {
@@ -117,80 +130,134 @@ function asMatchingProfile(db: DatabaseSync, row: ProfileRow): MatchingProfile {
     vector = {} as PersonalityVector;
     seeking = [];
   }
-  return { userId: row.user_id, active: row.active === 1, age: row.age, gender: row.gender, preferences: { acceptedGenders: seeking, minAge: row.min_age, maxAge: row.max_age }, questionnaireVersion: row.questionnaire_version, vector, blockedUserIds: blocked.map((item) => item.id), excludedUserIds: passed.map((item) => item.id) };
+  return { userId: row.user_id, active: row.active === 1, age: row.age, gender: row.gender, preferences: { acceptedGenders: seeking, minAge: row.min_age, maxAge: row.max_age }, questionnaireVersion: row.questionnaire_version, vector, blockedUserIds: blocked, excludedUserIds: passed };
 }
 
-export function listCandidates(db: DatabaseSync, viewerId: string): Candidate[] | null {
-  const viewerRow = getRow(db, viewerId);
-  if (!viewerRow) return null;
-  if (isReservedDemoIdentity(viewerId) && !isDemoViewer(viewerId)) return [];
-  const viewer = asMatchingProfile(db, viewerRow);
-  const candidatePool = isDemoViewer(viewerId)
-    ? { clause: "p.user_id IN (?, ?, ?)", values: SAMPLE_PROFILES.map(({ key }) => sampleId(viewerId, key)) }
-    : { clause: "substr(p.user_id, 1, 5) <> 'demo:' AND substr(p.user_id, 1, 7) <> 'sample:'", values: [] };
-  const rows = db.prepare(`SELECT * FROM profiles p WHERE p.user_id <> ? AND p.active = 1 AND ${candidatePool.clause}
-    AND NOT EXISTS (SELECT 1 FROM decisions d WHERE d.actor_id = ? AND d.target_id = p.user_id)
-    AND NOT EXISTS (SELECT 1 FROM rooms r WHERE (r.user_a = ? AND r.user_b = p.user_id) OR (r.user_b = ? AND r.user_a = p.user_id))
-    LIMIT 200`).all(viewerId, ...candidatePool.values, viewerId, viewerId, viewerId) as unknown as ProfileRow[];
-  const inputs = [];
-  for (const row of rows) {
-    const profile = asMatchingProfile(db, row);
-    if (!isEligiblePair(viewer, profile)) continue;
+/** Fetch exclusions only for the profiles being compared, without an N+1 query. */
+async function matchingProfiles(db: Database, rows: ProfileRow[]): Promise<Map<string, MatchingProfile>> {
+  const ids = rows.map((row) => row.user_id);
+  if (ids.length === 0) return new Map();
+  const blocked = await db.query<{ actor_id: string; target_id: string }>(
+    "SELECT blocker_id AS actor_id, blocked_id AS target_id FROM blocks WHERE blocker_id = ANY($1::text[]) AND blocked_id = ANY($1::text[]) AND (blocker_id = $2 OR blocked_id = $2)", [ids, ids[0]]);
+  const passed = await db.query<{ actor_id: string; target_id: string }>(
+    "SELECT actor_id, target_id FROM decisions WHERE actor_id = ANY($1::text[]) AND target_id = ANY($1::text[]) AND (actor_id = $2 OR target_id = $2) AND decision = 'pass'", [ids, ids[0]]);
+  const blockedByActor = new Map<string, string[]>();
+  const passedByActor = new Map<string, string[]>();
+  for (const item of blocked.rows) blockedByActor.set(item.actor_id, [...(blockedByActor.get(item.actor_id) ?? []), item.target_id]);
+  for (const item of passed.rows) passedByActor.set(item.actor_id, [...(passedByActor.get(item.actor_id) ?? []), item.target_id]);
+  return new Map(rows.map((row) => [row.user_id, asMatchingProfile(row, blockedByActor.get(row.user_id) ?? [], passedByActor.get(row.user_id) ?? [])]));
+}
+
+export async function listCandidates(db: Pool, viewerId: string): Promise<Candidate[] | null> {
+  return withTransaction(db, async (client) => {
+    const initialViewer = await getRow(client, viewerId);
+    if (!initialViewer) return null;
+    if (isReservedDemoIdentity(viewerId) && !isDemoViewer(viewerId)) return [];
+    const demo = isDemoViewer(viewerId);
+    const poolClause = demo
+      ? "p.user_id = ANY($2::text[])"
+      : "substr(p.user_id, 1, 5) <> 'demo:' AND substr(p.user_id, 1, 7) <> 'sample:'";
+    const values = demo ? [viewerId, SAMPLE_PROFILES.map(({ key }) => sampleId(viewerId, key))] : [viewerId];
+    const proposed = await client.query<{ user_id: string }>(`SELECT p.user_id FROM profiles p WHERE p.user_id <> $1 AND p.active = 1 AND ${poolClause}
+      AND NOT EXISTS (SELECT 1 FROM decisions d WHERE d.actor_id = $1 AND d.target_id = p.user_id)
+      AND NOT EXISTS (SELECT 1 FROM rooms r WHERE (r.user_a = $1 AND r.user_b = p.user_id) OR (r.user_b = $1 AND r.user_a = p.user_id))
+      ORDER BY p.user_id COLLATE "C" LIMIT 200`, values);
+    if (proposed.rows.length === 0) return [];
+    const proposedIds = proposed.rows.map(({ user_id }) => user_id);
+
+    // Key-share locks allow discovery requests to run together, while edits,
+    // decisions and blocks using the profile write locks wait. Acquire all
+    // locks in the same order before issuing tokens to avoid lock inversions.
+    await client.query('SELECT user_id FROM profiles WHERE user_id = ANY($1::text[]) ORDER BY user_id COLLATE "C" FOR KEY SHARE', [[viewerId, ...proposedIds]]);
+    const fresh = await client.query<ProfileRow>(`SELECT p.* FROM profiles p
+      WHERE p.user_id = $1 OR (p.user_id = ANY($2::text[]) AND p.active = 1
+        AND NOT EXISTS (SELECT 1 FROM decisions d WHERE d.actor_id = $1 AND d.target_id = p.user_id)
+        AND NOT EXISTS (SELECT 1 FROM rooms r WHERE (r.user_a = $1 AND r.user_b = p.user_id) OR (r.user_b = $1 AND r.user_a = p.user_id)))`, [viewerId, proposedIds]);
+    const viewerRow = fresh.rows.find((row) => row.user_id === viewerId);
+    if (!viewerRow) return null;
+    const rows = fresh.rows.filter((row) => row.user_id !== viewerId).sort((a, b) => compareUserIds(a.user_id, b.user_id));
+    const profiles = await matchingProfiles(client, [viewerRow, ...rows]);
+    const viewer = profiles.get(viewerId)!;
+    const eligible = rows.flatMap((row) => {
+      const profile = profiles.get(row.user_id)!;
+      return isEligiblePair(viewer, profile) ? [{ row, profile }] : [];
+    });
+    if (eligible.length === 0) return [];
+
     const now = Date.now();
-    const old = db.prepare("SELECT token, expires_at FROM candidate_tokens WHERE viewer_id = ? AND target_id = ?").get(viewerId, row.user_id) as { token: string; expires_at: number } | undefined;
-    const token = old && old.expires_at > now ? old.token : randomUUID();
-    db.prepare(`INSERT INTO candidate_tokens(token, viewer_id, target_id, expires_at) VALUES (?, ?, ?, ?)
-      ON CONFLICT(viewer_id, target_id) DO UPDATE SET token=excluded.token, expires_at=excluded.expires_at`).run(token, viewerId, row.user_id, now + 7 * 24 * 60 * 60 * 1000);
-    inputs.push({ profile, candidateId: token, blindAlias: row.alias });
-  }
-  const ranked = rankCandidates(viewer, inputs);
-  return isDemoViewer(viewerId)
-    ? ranked.map((candidate) => ({ ...candidate, explanation: "A sample introduction for this local demo." }))
-    : ranked;
+    // A single upsert keeps an unexpired token stable even when two discovery
+    // requests run at once. Candidate IDs never contain account IDs.
+    const tokens = await client.query<{ target_id: string; token: string }>(`INSERT INTO candidate_tokens AS existing
+      (token, viewer_id, target_id, expires_at)
+      SELECT proposed.token, $1, proposed.target_id, $2
+      FROM unnest($3::text[], $4::text[]) AS proposed(token, target_id)
+      ON CONFLICT (viewer_id, target_id) DO UPDATE SET
+        token = CASE WHEN existing.expires_at > $5 THEN existing.token ELSE EXCLUDED.token END,
+        expires_at = EXCLUDED.expires_at
+      RETURNING target_id, token`, [viewerId, now + 7 * 24 * 60 * 60 * 1000, eligible.map(() => randomUUID()), eligible.map(({ row }) => row.user_id), now]);
+    const tokenByTarget = new Map(tokens.rows.map(({ target_id, token }) => [target_id, token]));
+    const ranked = rankCandidates(viewer, eligible.map(({ row, profile }) => ({
+      profile, candidateId: tokenByTarget.get(row.user_id)!, blindAlias: row.alias,
+    })));
+    return demo ? ranked.map((candidate) => ({ ...candidate, explanation: "A sample introduction for this local demo." })) : ranked;
+  });
 }
 
-export function decideCandidate(db: DatabaseSync, viewerId: string, token: string, decision: "like" | "pass", onMatch?: (roomId: string, firstUserId: string, secondUserId: string) => void): "matched" | "pending" | "passed" | "unavailable" {
-  db.exec("BEGIN IMMEDIATE");
-  try {
-    const item = db.prepare("SELECT target_id FROM candidate_tokens WHERE token = ? AND viewer_id = ? AND expires_at > ?").get(token, viewerId, Date.now()) as { target_id: string } | undefined;
-    const viewer = getRow(db, viewerId);
-    const target = item && getRow(db, item.target_id);
-    const previous = item && db.prepare("SELECT 1 FROM decisions WHERE actor_id = ? AND target_id = ?").get(viewerId, item.target_id);
-    if (!item || !viewer || !target || previous || !sameMatchingPool(viewerId, item.target_id) || !isEligiblePair(asMatchingProfile(db, viewer), asMatchingProfile(db, target))) {
-      db.exec("ROLLBACK");
-      return "unavailable";
+type DecisionResult = "matched" | "pending" | "passed" | "unavailable";
+type NewMatch = { roomId: string; firstUserId: string; secondUserId: string };
+
+export async function decideCandidate(db: Pool, viewerId: string, token: string, decision: "like" | "pass", onMatch?: (roomId: string, firstUserId: string, secondUserId: string) => void | Promise<void>): Promise<DecisionResult> {
+  const result = await withTransaction<{ status: DecisionResult; newMatch: NewMatch | null }>(db, async (client) => {
+    if (decision !== "like" && decision !== "pass") return { status: "unavailable", newMatch: null };
+    const initial = await client.query<{ target_id: string }>(
+      "SELECT target_id FROM candidate_tokens WHERE token = $1 AND viewer_id = $2 AND expires_at > $3", [token, viewerId, Date.now()]);
+    const targetId = initial.rows[0]?.target_id;
+    if (!targetId || !sameMatchingPool(viewerId, targetId)) return { status: "unavailable", newMatch: null };
+
+    // Recheck every mutable condition after taking the shared pair locks. This
+    // serializes simultaneous likes, blocks, and profile edits for the pair.
+    await lockProfiles(client, [viewerId, targetId]);
+    const item = await client.query<{ target_id: string }>(
+      "SELECT target_id FROM candidate_tokens WHERE token = $1 AND viewer_id = $2 AND target_id = $3 AND expires_at > $4", [token, viewerId, targetId, Date.now()]);
+    const viewer = await getRow(client, viewerId);
+    const target = await getRow(client, targetId);
+    const previous = await client.query("SELECT 1 FROM decisions WHERE actor_id = $1 AND target_id = $2", [viewerId, targetId]);
+    if (!item.rows[0] || !viewer || !target || previous.rows.length > 0) return { status: "unavailable", newMatch: null };
+    const profiles = await matchingProfiles(client, [viewer, target]);
+    if (!isEligiblePair(profiles.get(viewerId)!, profiles.get(targetId)!)) return { status: "unavailable", newMatch: null };
+
+    await client.query("INSERT INTO decisions(actor_id, target_id, decision) VALUES ($1, $2, $3)", [viewerId, targetId, decision]);
+    if (decision === "like" && isSampleForViewer(viewerId, targetId)) {
+      // A sample's reciprocal like is confined to its own demo session.
+      await client.query("INSERT INTO decisions(actor_id, target_id, decision) VALUES ($1, $2, 'like') ON CONFLICT (actor_id, target_id) DO NOTHING", [targetId, viewerId]);
     }
-    db.prepare("INSERT INTO decisions(actor_id, target_id, decision) VALUES (?, ?, ?)").run(viewerId, item.target_id, decision);
-    if (decision === "like" && isSampleForViewer(viewerId, item.target_id)) {
-      // A sample's prewritten reciprocal like lets the normal mutual-match
-      // path create the room; it can never opt in for another demo session.
-      db.prepare("INSERT OR IGNORE INTO decisions(actor_id, target_id, decision) VALUES (?, ?, 'like')").run(item.target_id, viewerId);
-    }
-    let result: "matched" | "pending" | "passed" = decision === "pass" ? "passed" : "pending";
-    let newMatch: { roomId: string; firstUserId: string; secondUserId: string } | null = null;
-    const reverse = db.prepare("SELECT decision FROM decisions WHERE actor_id = ? AND target_id = ?").get(item.target_id, viewerId) as { decision: string } | undefined;
-    if (decision === "like" && reverse?.decision === "like") {
-      const [userA, userB] = [viewerId, item.target_id].sort();
+    let status: DecisionResult = decision === "pass" ? "passed" : "pending";
+    let newMatch: NewMatch | null = null;
+    const reverse = await client.query<{ decision: string }>("SELECT decision FROM decisions WHERE actor_id = $1 AND target_id = $2", [targetId, viewerId]);
+    if (decision === "like" && reverse.rows[0]?.decision === "like") {
+      // Postgres applies C collation to its canonical room-order constraint.
+      const [userA, userB] = [viewerId, targetId].sort(compareUserIds);
       const roomId = randomUUID();
-      const inserted = db.prepare("INSERT OR IGNORE INTO rooms(id, user_a, user_b) VALUES (?, ?, ?)").run(roomId, userA, userB);
-      if (Number(inserted.changes) === 1) newMatch = { roomId, firstUserId: userA, secondUserId: userB };
-      result = "matched";
+      const inserted = await client.query("INSERT INTO rooms(id, user_a, user_b) VALUES ($1, $2, $3) ON CONFLICT (user_a, user_b) DO NOTHING RETURNING id", [roomId, userA, userB]);
+      if (inserted.rowCount === 1) {
+        newMatch = { roomId, firstUserId: userA, secondUserId: userB };
+        // Both participants remain locked while current consent is checked.
+        await recordRoomEventInTransaction(client, userA, roomId, "match_created");
+        await recordRoomEventInTransaction(client, userB, roomId, "match_created");
+      }
+      status = "matched";
     }
-    if (result === "pending") {
-      // The other person's already-open introduction remains valid until they
-      // decide, even when it was loaded before this like.
-      db.prepare("DELETE FROM candidate_tokens WHERE viewer_id = ? AND target_id = ?").run(viewerId, item.target_id);
+    if (status === "pending") {
+      // A prior introduction issued to the other person stays valid.
+      await client.query("DELETE FROM candidate_tokens WHERE viewer_id = $1 AND target_id = $2", [viewerId, targetId]);
     } else {
-      db.prepare("DELETE FROM candidate_tokens WHERE (viewer_id = ? AND target_id = ?) OR (viewer_id = ? AND target_id = ?)").run(viewerId, item.target_id, item.target_id, viewerId);
+      await client.query("DELETE FROM candidate_tokens WHERE (viewer_id = $1 AND target_id = $2) OR (viewer_id = $2 AND target_id = $1)", [viewerId, targetId]);
     }
-    db.exec("COMMIT");
-    if (newMatch && onMatch) {
-      // Analytics is optional and must never undo an already committed match.
-      try { onMatch(newMatch.roomId, newMatch.firstUserId, newMatch.secondUserId); } catch { /* no-op */ }
-    }
-    return result;
-  } catch (error) {
-    db.exec("ROLLBACK");
-    throw error;
+    return { status, newMatch };
+  });
+  if (result.newMatch && onMatch) {
+    // Callbacks run after commit and cannot undo an already created room.
+    try { await onMatch(result.newMatch.roomId, result.newMatch.firstUserId, result.newMatch.secondUserId); } catch { /* no-op */ }
   }
+  return result.status;
 }

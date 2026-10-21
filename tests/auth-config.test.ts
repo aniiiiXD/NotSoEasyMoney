@@ -3,10 +3,11 @@ import assert from "node:assert/strict";
 import { authCallbacks, googleProvider, googleSignInAvailable } from "../src/lib/auth-config.ts";
 import { signInErrorMessage } from "../src/app/sign-in/auth-error.ts";
 
-test("Google sign-in stays disabled on Vercel until hosted storage is ready", () => {
-  const credentials = { AUTH_GOOGLE_ID: "client-id", AUTH_GOOGLE_SECRET: "client-secret" };
+test("Google sign-in requires both hosted storage and OAuth credentials", () => {
+  const credentials = { AUTH_GOOGLE_ID: "client-id", AUTH_GOOGLE_SECRET: "client-secret", DATABASE_URL: "postgres://example" };
   assert.equal(googleSignInAvailable(credentials), true);
-  assert.equal(googleSignInAvailable({ ...credentials, VERCEL: "1" }), false);
+  assert.equal(googleSignInAvailable({ ...credentials, VERCEL: "1" }), true);
+  assert.equal(googleSignInAvailable({ ...credentials, DATABASE_URL: "" }), false);
   assert.equal(googleSignInAvailable({ AUTH_GOOGLE_ID: "client-id" }), false);
 });
 
