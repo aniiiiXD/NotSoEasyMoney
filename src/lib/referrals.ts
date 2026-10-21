@@ -11,6 +11,37 @@ export function normalizeReferralCode(input: string): string | null {
   return CODE.test(code) ? code : null;
 }
 
+/** Access to exact influencer counts is restricted separately from analytics. */
+export function isReferralAdmin(userId: unknown, env: Record<string, string | undefined> = process.env): boolean {
+  if (typeof userId !== "string" || !userId || userId.length > 512) return false;
+  return (env.REFERRAL_ADMIN_USER_IDS ?? "").split(",").map((id) => id.trim()).filter(Boolean).includes(userId);
+}
+
+export type ReferralSummary = { code: string; label: string; active: boolean; signups: number; profiles: number; url: string; qrUrl: string };
+
+export async function listReferralSummaries(db: Pool): Promise<ReferralSummary[]> {
+  const { rows } = await db.query<{ code: string; label: string; active: boolean; signups: number; profiles: number }>(`SELECT c.code, c.label, c.active,
+    COUNT(a.user_id)::integer AS signups, COUNT(a.profile_completed_at)::integer AS profiles
+    FROM referral_codes c LEFT JOIN referral_attributions a ON a.code = c.code
+    GROUP BY c.code, c.label, c.active, c.created_at ORDER BY c.created_at DESC, c.code`);
+  return rows.map((row) => ({ ...row, url: referralUrl(row.code), qrUrl: `${referralUrl(row.code)}/qr` }));
+}
+
+export async function createReferral(db: Pool, inputCode: unknown, inputLabel: unknown): Promise<"created" | "invalid" | "exists"> {
+  const code = typeof inputCode === "string" ? normalizeReferralCode(inputCode) : null;
+  const label = typeof inputLabel === "string" ? inputLabel.trim() : "";
+  if (!code || !label || [...label].length > 80 || /[\u0000-\u001f\u007f]/.test(label)) return "invalid";
+  const result = await db.query("INSERT INTO referral_codes (code, label) VALUES ($1, $2) ON CONFLICT (code) DO NOTHING RETURNING code", [code, label]);
+  return result.rowCount ? "created" : "exists";
+}
+
+export async function setReferralActive(db: Pool, inputCode: unknown, active: unknown): Promise<"updated" | "invalid" | "not_found"> {
+  const code = typeof inputCode === "string" ? normalizeReferralCode(inputCode) : null;
+  if (!code || typeof active !== "boolean") return "invalid";
+  const result = await db.query("UPDATE referral_codes SET active = $2 WHERE code = $1 RETURNING code", [code, active]);
+  return result.rowCount ? "updated" : "not_found";
+}
+
 function signature(payload: string, secret: string): string {
   return createHmac("sha256", secret).update(`referral:${payload}`).digest("hex");
 }

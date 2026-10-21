@@ -20,6 +20,7 @@ const db = getDb();
 const suffix = randomUUID().replaceAll("-", "").slice(0, 12).toUpperCase();
 const code = `E2E${suffix}`;
 const secondCode = `ALT${suffix}`;
+const dashboardCode = `DASH${suffix}`;
 const users = [`google:e2e-${suffix}-alice`, `google:e2e-${suffix}-bob`];
 const aliases = [`A${suffix.slice(0, 6)}`, `B${suffix.slice(0, 6)}`];
 let verifiedTestDatabase = false;
@@ -42,6 +43,24 @@ try {
   assert.equal(created.status, 0, "Referral CLI must create the code");
   assert.match(created.stdout, new RegExp(`/r/${code}/qr`));
   await db.query("INSERT INTO referral_codes (code, label) VALUES ($1, 'Other creator')", [secondCode]);
+
+  const admin = await session("google:e2e-admin");
+  const outsider = await session("google:e2e-outsider");
+  assert.equal((await request("/api/admin/referrals")).status, 401);
+  assert.equal((await request("/api/admin/referrals", { headers: { cookie: outsider } })).status, 403);
+  assert.equal((await request("/admin/referrals", { headers: { cookie: outsider } })).status, 404);
+  assert.equal((await request("/api/admin/referrals", { method: "POST", headers: { cookie: admin, origin: "https://evil.example", "content-type": "application/json" }, body: JSON.stringify({ code: dashboardCode, label: "Test" }) })).status, 403);
+  const dashboard = await request("/admin/referrals", { headers: { cookie: admin } });
+  assert.equal(dashboard.status, 200);
+  assert.match(await dashboard.text(), /Influencer links/);
+  assert.ok((await json("/api/admin/referrals", admin, "POST", { code: dashboardCode.toLowerCase(), label: "Dashboard creator" })).referrals.some((item) => item.code === dashboardCode && item.active));
+  assert.equal((await request("/api/admin/referrals", { method: "POST", headers: { cookie: admin, origin, "content-type": "application/json" }, body: JSON.stringify({ code: dashboardCode, label: "Duplicate" }) })).status, 409);
+  assert.equal((await request(`/r/${dashboardCode}/qr`)).status, 200);
+  await json("/api/admin/referrals", admin, "PATCH", { code: dashboardCode, active: false });
+  assert.equal((await request(`/r/${dashboardCode}/qr`)).status, 404);
+  await json("/api/admin/referrals", admin, "PATCH", { code: dashboardCode, active: true });
+  assert.equal((await request(`/r/${dashboardCode}/qr`)).status, 200);
+  console.log("PASS private dashboard access, create, duplicate rejection, QR, disable and re-enable");
 
   const invite = await request(`/r/${code}`);
   assert.equal(invite.status, 307);
@@ -106,6 +125,10 @@ try {
   const attribution = (await db.query("SELECT code, profile_completed_at FROM referral_attributions WHERE user_id = $1", [users[0]])).rows[0];
   assert.equal(attribution.code, code);
   assert.ok(attribution.profile_completed_at);
+  const summary = (await json("/api/admin/referrals", admin)).referrals.find((item) => item.code === code);
+  assert.equal(summary.signups, 1);
+  assert.equal(summary.profiles, 1);
+  console.log("PASS dashboard signup and completed-profile counts");
   const listing = spawnSync(process.execPath, ["scripts/referrals.mjs", "list"], { env: process.env, encoding: "utf8" });
   assert.equal(listing.status, 0);
   assert.ok(listing.stdout.includes(code));
@@ -117,7 +140,7 @@ try {
     await db.query("DELETE FROM profiles WHERE user_id = ANY($1::text[])", [users]);
     await db.query("DELETE FROM analytics_events WHERE user_id = ANY($1::text[])", [users]);
     await db.query("DELETE FROM app_users WHERE user_id = ANY($1::text[])", [users]);
-    await db.query("DELETE FROM referral_codes WHERE code = ANY($1::text[])", [[code, secondCode]]);
+    await db.query("DELETE FROM referral_codes WHERE code = ANY($1::text[])", [[code, secondCode, dashboardCode]]);
   }
   await db.end();
 }

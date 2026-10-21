@@ -43,7 +43,9 @@ For local development, create a Google OAuth **Web application** client, add you
 
 ## Influencer referrals
 
-Create and manage invitation codes from a trusted operator environment with `DATABASE_URL` set. Set `APP_URL` to the public HTTPS origin, or a loopback HTTP origin for local testing; it determines the invitation and QR destinations.
+The private `/admin/referrals` dashboard lets authorized operators create links, view signup and profile counts, open QR codes, and disable or re-enable invitations. Set `REFERRAL_ADMIN_USER_IDS` to a comma-separated list of the exact authenticated Google user IDs (`google:` followed by the provider subject); an empty list denies everyone. Give access only to trusted operators, because the dashboard shows exact counts. Set `APP_URL` to the public HTTPS origin, or a loopback HTTP origin for local testing; it determines the invitation and QR destinations.
+
+Codes can also be managed from a trusted operator environment with `DATABASE_URL` set:
 
 ```bash
 npm run referrals -- create CREATOR1 "Influencer name"
@@ -54,7 +56,7 @@ npm run referrals -- enable CREATOR1
 
 The create command prints an invitation link at `/r/CREATOR1` and a QR image at `/r/CREATOR1/qr`. Codes are 3–32 letters, numbers, hyphens, or underscores, beginning with a letter or number; they are normalized to uppercase. A visitor can remove an invitation before signing in. The first valid invitation is held for up to 30 days and is credited only when a Google account is first registered while the code remains active. Returning Google accounts, local test accounts, and demo sessions do not create referral signups. The list command separately shows attributed Google signups and how many subsequently created a profile; it does not count link clicks.
 
-Referral attribution is stored separately from opt-in usage analytics and associates the account ID with a code. The operator CLI shows exact counts without the analytics dashboard's small-group suppression; there is no influencer-facing reporting portal. Share these counts and protect database access accordingly.
+Referral attribution is stored separately from opt-in usage analytics and associates the account ID with a code. The operator dashboard and CLI show exact counts without the analytics dashboard's small-group suppression; there is no influencer-facing reporting portal. Share these counts and protect access accordingly.
 
 ## Safety reports
 
@@ -83,7 +85,7 @@ Do not run database tests against production or any database containing data you
 To exercise the built app over HTTP, start it with the test database and a disposable secret in one terminal:
 
 ```bash
-env -u DATABASE_URL -u DATABASE_URL_UNPOOLED AUTH_SECRET=disposable-local-test-secret AUTH_TRUST_HOST=true APP_URL=http://127.0.0.1:3015 node --env-file=.env.test.local node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3015
+env -u DATABASE_URL -u DATABASE_URL_UNPOOLED AUTH_SECRET=disposable-local-test-secret AUTH_TRUST_HOST=true REFERRAL_ADMIN_USER_IDS=google:e2e-admin APP_URL=http://127.0.0.1:3015 node --env-file=.env.test.local node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3015
 ```
 
 Then run the end-to-end check in another terminal:
@@ -92,6 +94,6 @@ Then run the end-to-end check in another terminal:
 env -u DATABASE_URL -u DATABASE_URL_UNPOOLED AUTH_SECRET=disposable-local-test-secret APP_URL=http://127.0.0.1:3015 node --env-file=.env.test.local scripts/e2e-neon.mjs
 ```
 
-The check decodes a QR image and exercises referral attribution, profile creation, matching, chat, and analytics consent using simulated identities. It does not sign in to a real Google account.
+The check exercises private referral administration and access controls, decodes a QR image, and tests referral attribution, profile creation, matching, chat, and analytics consent using simulated identities. It does not sign in to a real Google account.
 
 Before a public launch, the app still needs a production security, privacy, moderation, account-deletion, and operations review. Ages are self-reported; no identity or age verification is implemented.
