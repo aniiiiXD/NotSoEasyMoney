@@ -2,7 +2,7 @@
 
 A local-first Next.js prototype for getting to know someone before seeing their photo. Adults can create a nickname, answer optional connection-preference questions, receive blind introductions, and open a private chat after both people choose each other.
 
-This version is for development on one computer, not a public launch.
+The [Vercel landing page](https://mystery-match-ani.vercel.app) is deployed for preview. The matching, profiles, and chat still depend on a local SQLite file, and Google sign-in is disabled on Vercel until hosted storage is implemented. This is not ready for a public launch.
 
 ## Run locally
 
@@ -36,7 +36,7 @@ Local profiles, messages, and settings are stored in `.local/closer.sqlite` on t
 
 ## Google sign-in
 
-Google sign-in is wired up but requires your own OAuth credentials. For a full walkthrough, including troubleshooting, see [Set up Google sign-in locally](docs/google-auth.md):
+Google sign-in is wired up but requires your own OAuth credentials. For local and Vercel configuration, including troubleshooting, see [Set up Google sign-in](docs/google-auth.md). To use it locally:
 
 1. In [Google Cloud](https://console.cloud.google.com/), configure the OAuth consent screen and create an OAuth client of type **Web application**. Add your Google account as a test user if the app's audience is still in testing.
 2. Add an authorized redirect URI matching the exact local address and port you use, followed by `/api/auth/callback/google`. For example, if the server prints `http://127.0.0.1:3002`, use `http://127.0.0.1:3002/api/auth/callback/google`.

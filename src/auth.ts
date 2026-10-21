@@ -3,10 +3,10 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { getDb } from "@/lib/db";
 import { recordEvent } from "@/lib/analytics";
-import { authCallbacks, googleProvider, localAuthCookies } from "@/lib/auth-config";
+import { authCallbacks, googleProvider, googleSignInAvailable, localAuthCookies } from "@/lib/auth-config";
 import { authorizeDemo, localDemoEnabled } from "@/app/sign-in/demo";
 
-export const googleConfigured = Boolean(process.env.AUTH_GOOGLE_ID?.trim() && process.env.AUTH_GOOGLE_SECRET?.trim());
+export const googleConfigured = googleSignInAvailable();
 export const authConfigured = Boolean(process.env.AUTH_SECRET?.trim());
 export const localTestLoginEnabled =
   process.env.NODE_ENV === "development" && process.env.LOCAL_TEST_LOGIN === "true";

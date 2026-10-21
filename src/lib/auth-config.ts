@@ -1,6 +1,12 @@
 import type { NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
 
+// A Vercel deployment cannot use the local SQLite file as shared storage.
+// Keep the provider disabled there until the hosted data layer is implemented.
+export function googleSignInAvailable(env: Record<string, string | undefined> = process.env): boolean {
+  return !env.VERCEL && Boolean(env.AUTH_GOOGLE_ID?.trim() && env.AUTH_GOOGLE_SECRET?.trim());
+}
+
 // Browsers share cookies across ports. Namespace development cookies so an
 // unrelated Auth.js app on localhost cannot replace this app's session/state.
 // Auth.js still supplies its normal request-specific security options.

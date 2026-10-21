@@ -1,6 +1,21 @@
-# Set up Google sign-in locally
+# Set up Google sign-in
 
 Google sign-in needs a Google Cloud project and OAuth client. The local demo works without those credentials; it is not a real Google account.
+
+The landing page is deployed at [mystery-match-ani.vercel.app](https://mystery-match-ani.vercel.app). Google sign-in is deliberately disabled on Vercel until the app has a hosted database; creating credentials alone does not make the deployed profile or chat flow operational.
+
+## Vercel OAuth client
+
+In Google Auth Platform, create a **Web application** OAuth client and add these exact production values:
+
+- Authorized JavaScript origin: `https://mystery-match-ani.vercel.app`
+- Authorized redirect URI: `https://mystery-match-ani.vercel.app/api/auth/callback/google`
+
+You can add the local redirect URIs described below to the same client. If the Google app is in Testing, add each intended Google account under **Audience → Test users**.
+
+In the [Mystery Match Vercel environment settings](https://vercel.com/aniiiixds-projects/mystery-match/settings/environment-variables), add the client ID as `AUTH_GOOGLE_ID` and the client secret as `AUTH_GOOGLE_SECRET` for **Production**. Do not commit or share the secret. `AUTH_SECRET` was generated separately in Vercel for production sessions. Environment changes take effect on a new deployment.
+
+After the hosted database is implemented and Google sign-in is enabled, test the complete sign-in and profile flow on the production URL. The rest of this guide covers local setup.
 
 ## 1. Create a Google OAuth client
 

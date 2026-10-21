@@ -72,7 +72,7 @@ export default async function SignInPage({ searchParams }: {
             <span className={styles.googleMark} aria-hidden="true">G</span> Continue with Google
           </button>
         </form>
-        {!authConfigured && <p className={styles.setup}>Sign-in needs local setup. See the project setup guide to get started.</p>}
+        {!authConfigured && !process.env.VERCEL && <p className={styles.setup}>Sign-in needs local setup. See the project setup guide to get started.</p>}
         {!googleConfigured && <p className={styles.setup}>Google sign-in will be available once connected.</p>}
         {localTestLoginEnabled && authConfigured && <details className={styles.local}>
           <summary>Use a local test account</summary>

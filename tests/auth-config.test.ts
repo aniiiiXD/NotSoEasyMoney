@@ -1,7 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { authCallbacks, googleProvider } from "../src/lib/auth-config.ts";
+import { authCallbacks, googleProvider, googleSignInAvailable } from "../src/lib/auth-config.ts";
 import { signInErrorMessage } from "../src/app/sign-in/auth-error.ts";
+
+test("Google sign-in stays disabled on Vercel until hosted storage is ready", () => {
+  const credentials = { AUTH_GOOGLE_ID: "client-id", AUTH_GOOGLE_SECRET: "client-secret" };
+  assert.equal(googleSignInAvailable(credentials), true);
+  assert.equal(googleSignInAvailable({ ...credentials, VERCEL: "1" }), false);
+  assert.equal(googleSignInAvailable({ AUTH_GOOGLE_ID: "client-id" }), false);
+});
 
 test("Google sign-in uses a stable subject without storing profile data", async () => {
   const token = await authCallbacks.jwt({
