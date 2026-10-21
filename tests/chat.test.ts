@@ -1,9 +1,7 @@
 import { after, beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
 import { getDb } from "../src/lib/db.ts";
 import { blockRoom, listRooms, readRoom, reportRoom, sendMessage } from "../src/lib/chat.ts";
-import { sampleId } from "../src/lib/demo.ts";
 
 // These tests reset tables. Fail before opening a connection unless the caller
 // explicitly provides a disposable test database, never the application DB.
@@ -46,7 +44,6 @@ beforeEach(async () => {
   await addProfile("local:eve", "Eve");
   await addRoom("room-1", "local:alice", "local:bob");
 });
-
 after(async () => { await db.end(); });
 
 test("only active members can list, read, or send to a conversation", async () => {
@@ -178,16 +175,10 @@ test("message analytics needs both people's consent and cannot break a send", as
   }
 });
 
-test("a sample room returns its scripted reply without recording analytics", async () => {
-  const demoId = `demo:${randomUUID()}`;
-  const otherId = sampleId(demoId, "sage");
-  await addProfile(demoId, "Demo", 1);
-  await addProfile(otherId, "Sage", 1);
-  await addRoom("sample-room", demoId, otherId);
-  const sent = await sendMessage(demoId, "sample-room", "Hello");
-  assert.equal(sent.ok, true);
-  if (!sent.ok) return;
-  assert.ok(sent.sampleReply?.body.startsWith("Demo reply:"));
-  assert.deepEqual((await readRoom(demoId, "sample-room"))?.messages.map((message) => message.mine), [true, false]);
-  assert.equal((await db.query("SELECT 1 FROM analytics_events")).rowCount, 0);
+test("legacy sample rooms cannot be seen or used", async () => {
+  await addProfile("sample:old", "Old sample");
+  await addRoom("old-sample-room", "local:alice", "sample:old");
+  assert.ok(!(await listRooms("local:alice")).some((room) => room.id === "old-sample-room"));
+  assert.equal(await readRoom("local:alice", "old-sample-room"), null);
+  assert.deepEqual(await sendMessage("local:alice", "old-sample-room", "Hello"), { ok: false, reason: "not_found" });
 });

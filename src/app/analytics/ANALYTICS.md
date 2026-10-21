@@ -4,9 +4,7 @@ Usage analytics is opt-in and stored in the configured Neon Postgres database;
 events are not sent to a third-party analytics service. The database is hosted,
 including when the app runs locally. Protect its credentials, access, and backups.
 
-The local demo uses fictional profiles and scripted replies. Demo and sample
-identities never generate events for the real report; `/demo/analytics` shows
-separately labeled, illustrative numbers rather than collected activity.
+Legacy demo and sample identities never generate events for the real report.
 
 The user can change their preference at `/analytics/consent`. Turning it off
 updates their profile and deletes their events in the same transaction. If an

@@ -5,7 +5,7 @@ import { recordEventInTransaction, recordRoomEventInTransaction } from "./analyt
 import { lockProfiles, withTransaction } from "./db.ts";
 import { isEligiblePair, rankCandidates, type Candidate, type MatchingProfile } from "./matching.ts";
 import { emptyAnswers, normalizeAnswers, parsePersonalityAnswers, QUESTIONNAIRE_VERSION, type PersonalityAnswers, type PersonalityVector } from "./personality.ts";
-import { isDemoViewer, isReservedDemoIdentity, isSampleForViewer, sameMatchingPool, sampleId, SAMPLE_PROFILES } from "./demo.ts";
+import { isReservedDemoIdentity, sameMatchingPool } from "./demo.ts";
 
 export const GENDERS = ["woman", "man", "nonbinary", "another identity"] as const;
 type Gender = (typeof GENDERS)[number];
@@ -101,21 +101,6 @@ export async function saveProfile(db: Pool, userId: string, value: unknown): Pro
         updated_at=$11 WHERE user_id=$1`, [...values.slice(0, 10), new Date().toISOString()]);
     }
 
-    if (isDemoViewer(userId)) {
-      // Samples belong to this demo only. Preserve prior decisions, blocks,
-      // conversations, and consent when the viewer updates their profile.
-      for (const sample of SAMPLE_PROFILES) {
-        await client.query(`INSERT INTO profiles
-          (user_id, alias, age, gender, seeking, min_age, max_age, answers, vector, questionnaire_version, analytics_consent)
-          VALUES ($1, $2, $3, $4, $5, 18, 120, $6, $7, $8, 0)
-          ON CONFLICT (user_id) DO UPDATE SET alias=EXCLUDED.alias, age=EXCLUDED.age,
-          gender=EXCLUDED.gender, seeking=EXCLUDED.seeking, min_age=EXCLUDED.min_age,
-          max_age=EXCLUDED.max_age, answers=EXCLUDED.answers, vector=EXCLUDED.vector,
-          questionnaire_version=EXCLUDED.questionnaire_version, updated_at=$9`,
-        [sampleId(userId, sample.key), sample.alias, profile.minAge, profile.seeking[0],
-          JSON.stringify([profile.gender]), JSON.stringify(sample.answers), JSON.stringify(normalizeAnswers(sample.answers)), QUESTIONNAIRE_VERSION, new Date().toISOString()]);
-      }
-    }
     await client.query("DELETE FROM candidate_tokens WHERE viewer_id = $1 OR target_id = $1", [userId]);
     if (created) {
       await client.query("UPDATE referral_attributions SET profile_completed_at = now() WHERE user_id = $1 AND profile_completed_at IS NULL", [userId]);
@@ -158,12 +143,9 @@ export async function listCandidates(db: Pool, viewerId: string): Promise<Candid
   return withTransaction(db, async (client) => {
     const initialViewer = await getRow(client, viewerId);
     if (!initialViewer) return null;
-    if (isReservedDemoIdentity(viewerId) && !isDemoViewer(viewerId)) return [];
-    const demo = isDemoViewer(viewerId);
-    const poolClause = demo
-      ? "p.user_id = ANY($2::text[])"
-      : "substr(p.user_id, 1, 5) <> 'demo:' AND substr(p.user_id, 1, 7) <> 'sample:'";
-    const values = demo ? [viewerId, SAMPLE_PROFILES.map(({ key }) => sampleId(viewerId, key))] : [viewerId];
+    if (isReservedDemoIdentity(viewerId)) return [];
+    const poolClause = "substr(p.user_id, 1, 5) <> 'demo:' AND substr(p.user_id, 1, 7) <> 'sample:'";
+    const values = [viewerId];
     const proposed = await client.query<{ user_id: string }>(`SELECT p.user_id FROM profiles p WHERE p.user_id <> $1 AND p.active = 1 AND ${poolClause}
       AND NOT EXISTS (SELECT 1 FROM decisions d WHERE d.actor_id = $1 AND d.target_id = p.user_id)
       AND NOT EXISTS (SELECT 1 FROM rooms r WHERE (r.user_a = $1 AND r.user_b = p.user_id) OR (r.user_b = $1 AND r.user_a = p.user_id))
@@ -205,7 +187,7 @@ export async function listCandidates(db: Pool, viewerId: string): Promise<Candid
     const ranked = rankCandidates(viewer, eligible.map(({ row, profile }) => ({
       profile, candidateId: tokenByTarget.get(row.user_id)!, blindAlias: row.alias,
     })));
-    return demo ? ranked.map((candidate) => ({ ...candidate, explanation: "A sample introduction for this local demo." })) : ranked;
+    return ranked;
   });
 }
 
@@ -233,10 +215,6 @@ export async function decideCandidate(db: Pool, viewerId: string, token: string,
     if (!isEligiblePair(profiles.get(viewerId)!, profiles.get(targetId)!)) return { status: "unavailable", newMatch: null };
 
     await client.query("INSERT INTO decisions(actor_id, target_id, decision) VALUES ($1, $2, $3)", [viewerId, targetId, decision]);
-    if (decision === "like" && isSampleForViewer(viewerId, targetId)) {
-      // A sample's reciprocal like is confined to its own demo session.
-      await client.query("INSERT INTO decisions(actor_id, target_id, decision) VALUES ($1, $2, 'like') ON CONFLICT (actor_id, target_id) DO NOTHING", [targetId, viewerId]);
-    }
     let status: DecisionResult = decision === "pass" ? "passed" : "pending";
     let newMatch: NewMatch | null = null;
     const reverse = await client.query<{ decision: string }>("SELECT decision FROM decisions WHERE actor_id = $1 AND target_id = $2", [targetId, viewerId]);

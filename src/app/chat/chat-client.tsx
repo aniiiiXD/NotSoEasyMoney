@@ -9,11 +9,10 @@ import appStyles from "../app.module.css";
 
 type SelectedRoom = { id: string; alias: string; messages: ChatMessage[] };
 
-export default function ChatClient({ initialRooms, selected, logout, demoMode }: {
+export default function ChatClient({ initialRooms, selected, logout }: {
   initialRooms: RoomSummary[];
   selected: SelectedRoom | null;
   logout: () => Promise<void>;
-  demoMode: boolean;
 }) {
   const router = useRouter();
   const [rooms, setRooms] = useState(initialRooms);
@@ -102,7 +101,7 @@ export default function ChatClient({ initialRooms, selected, logout, demoMode }:
       } else {
         messageVersion.current += 1;
         keepAtBottom.current = true;
-        const added: ChatMessage[] = result.sampleReply ? [result.message, result.sampleReply] : [result.message];
+        const added: ChatMessage[] = [result.message];
         setMessages((current) => [...current, ...added.filter((message) => !current.some((existing) => existing.id === message.id))]);
       }
     } catch { restoreDraft(); setError("Couldn’t connect. Your message is ready to retry."); }
@@ -152,7 +151,6 @@ export default function ChatClient({ initialRooms, selected, logout, demoMode }:
     </header>
     <div className={styles.content}>
       <div className={styles.heading}><p>YOUR CONNECTIONS</p><h1>Conversations</h1><span>A little space to get to know each other.</span></div>
-      {demoMode && <div className={`${appStyles.demoNote} ${styles.demoNote}`}><p><strong>Local demo.</strong> These conversations are simulated with scripted replies.</p><Link href="/demo/analytics">See sample analytics →</Link></div>}
       <section className={styles.workspace} aria-label="Conversations">
         <aside className={`${styles.sidebar} ${selected ? styles.sidebarSelected : ""}`}>
           <div className={styles.sidebarTitle}><h2>Your matches</h2><span>{rooms.length}</span></div>
@@ -170,8 +168,8 @@ export default function ChatClient({ initialRooms, selected, logout, demoMode }:
             <div className={styles.conversationHeader}>
               <Link href="/chat" className={styles.back} aria-label="Back to conversations">←</Link>
               <span className={styles.avatar} aria-hidden="true">{selected.alias.slice(0, 1).toUpperCase()}</span>
-              <div className={styles.person}><h1>{selected.alias}</h1><small>{demoMode ? "Sample chat · scripted replies" : "Get to know each other"}</small></div>
-              {!demoMode && <button type="button" className={styles.block} onClick={() => setReportOpen((open) => !open)} disabled={unavailable}>Report</button>}
+              <div className={styles.person}><h1>{selected.alias}</h1><small>Get to know each other</small></div>
+              <button type="button" className={styles.block} onClick={() => setReportOpen((open) => !open)} disabled={unavailable}>Report</button>
               <button type="button" className={styles.block} onClick={block} disabled={blocking || unavailable}>Block</button>
             </div>
             {reportOpen && !unavailable && <form onSubmit={report} className={styles.reportForm}>

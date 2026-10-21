@@ -3,7 +3,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { SAMPLE_VIEWER_ANSWERS } from "@/lib/demo";
 import { emptyAnswers, hasAnswers, QUESTIONS, type AnswerValue, type PersonalityAnswers, type PersonalityQuestionId } from "@/lib/personality";
 import type { ProfileInput } from "@/lib/local-matching";
 import styles from "../app.module.css";
@@ -11,7 +10,7 @@ import styles from "../app.module.css";
 const genderOptions = ["woman", "man", "nonbinary", "another identity"] as const;
 const lastStep = QUESTIONS.length + 1;
 
-export default function ProfileForm({ initial, logout, demoMode }: { initial: ProfileInput | null; logout: () => Promise<void>; demoMode: boolean }) {
+export default function ProfileForm({ initial, logout }: { initial: ProfileInput | null; logout: () => Promise<void> }) {
   const router = useRouter();
   const [alias, setAlias] = useState(initial?.alias ?? "");
   const [age, setAge] = useState(initial ? String(initial.age) : "");
@@ -23,7 +22,6 @@ export default function ProfileForm({ initial, logout, demoMode }: { initial: Pr
   const [analyticsConsent, setAnalyticsConsent] = useState(initial?.analyticsConsent ?? false);
   const [step, setStep] = useState(0);
   const [error, setError] = useState("");
-  const [sampleError, setSampleError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [skipped, setSkipped] = useState<Set<PersonalityQuestionId>>(() => new Set());
   const answered = Object.values(answers).filter((answer) => answer !== null).length;
@@ -35,7 +33,6 @@ export default function ProfileForm({ initial, logout, demoMode }: { initial: Pr
 
   function goToStep(next: number) {
     setError("");
-    setSampleError(false);
     setStep(next);
     window.scrollTo({ top: 0 });
   }
@@ -45,22 +42,8 @@ export default function ProfileForm({ initial, logout, demoMode }: { initial: Pr
     setSkipped((previous) => { const next = new Set(previous); next.delete(id); return next; });
   }
 
-  function fillSampleProfile() {
-    setAlias("Alex");
-    setAge("27");
-    setGender("nonbinary");
-    setSeeking([...genderOptions]);
-    setMinAge("18");
-    setMaxAge("99");
-    setAnswers({ ...SAMPLE_VIEWER_ANSWERS });
-    setSkipped(new Set());
-    setError("");
-    setSampleError(false);
-  }
-
-  async function saveProfile(profile: unknown, fromSample = false) {
+  async function saveProfile(profile: unknown) {
     setSaving(true);
-    setSampleError(fromSample);
     setError("");
     try {
       const response = await fetch("/api/profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(profile) });
@@ -75,18 +58,9 @@ export default function ProfileForm({ initial, logout, demoMode }: { initial: Pr
     }
   }
 
-  async function startSampleDemo() {
-    await saveProfile({
-      alias: "Alex", age: 27, gender: "nonbinary", seeking: [...genderOptions], minAge: 18, maxAge: 99,
-      answers: SAMPLE_VIEWER_ANSWERS,
-      analyticsConsent: false,
-    }, true);
-  }
-
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
-    setSampleError(false);
     if (step === 0) {
       if (seeking.length === 0) { setError("Choose at least one option for who you’d like to meet."); return; }
       if (Number(minAge) > Number(maxAge)) { setError("Your preferred age range must start at or below the end of the range."); return; }
@@ -106,18 +80,11 @@ export default function ProfileForm({ initial, logout, demoMode }: { initial: Pr
       </header>
       <main className={styles.narrow}>
         {initial && !hasAnswers(initial.answers) && step === 0 && <p className={styles.demoNote}><strong>New questions.</strong> We’ve updated the questionnaire. Please answer the new questions to keep getting introductions.</p>}
-        {demoMode && step === 0 && <p className={styles.demoNote}><strong>Local demo.</strong> You’re exploring with sample profiles and scripted replies.</p>}
-        <div className={styles.progressHeader} aria-live="polite"><span>{demoMode ? "Demo profile" : initial ? "Edit profile" : "Your profile"}</span><span>Step {step + 1} of {lastStep + 1}</span></div>
+        <div className={styles.progressHeader} aria-live="polite"><span>{initial ? "Edit profile" : "Your profile"}</span><span>Step {step + 1} of {lastStep + 1}</span></div>
         <div className={styles.progressTrack} aria-hidden="true"><span style={{ width: `${((step + 1) / (lastStep + 1)) * 100}%` }} /></div>
         <form className={styles.form} onSubmit={submit}>
           {step === 0 && <section className={styles.formSection} aria-labelledby="about-title">
             <div className={styles.intro}><p className={styles.kicker}>Let’s start here</p><h1 id="about-title">A little about you.</h1><p>Choose a nickname that doesn’t identify you. Mystery Match is for adults 18 and over.</p></div>
-            {demoMode && !initial && <div className={styles.sampleFill}>
-              <p>Go straight to fictional introductions with a sample profile, or fill in your own details below.</p>
-              <button className={styles.samplePrimary} type="button" disabled={saving} onClick={startSampleDemo}>{saving ? "Getting things ready…" : "Explore with a sample profile"}</button>
-              <button className={styles.sampleReview} type="button" disabled={saving} onClick={fillSampleProfile}>Use sample answers and review the questions</button>
-              {sampleError && error && <p className={styles.sampleError} role="alert">{error}</p>}
-            </div>}
             <div className={styles.fieldGrid}>
               <label className={styles.field}>Your nickname<input required minLength={2} maxLength={24} value={alias} onChange={(event) => setAlias(event.target.value)} placeholder="e.g. moonbeam" autoComplete="off" /></label>
               <label className={styles.field}>Your age<input required type="number" min={18} max={120} value={age} onChange={(event) => setAge(event.target.value)} placeholder="18+" inputMode="numeric" /></label>
@@ -138,15 +105,15 @@ export default function ProfileForm({ initial, logout, demoMode }: { initial: Pr
           </section>}
 
           {step === lastStep && <section className={styles.formSection} aria-labelledby="privacy-title">
-            <div className={styles.intro}><p className={styles.kicker}>One last thing</p><h1 id="privacy-title" tabIndex={-1}>Your data, your choice.</h1><p>{demoMode ? "Your demo profile is stored in our database, and your introductions are fictional." : "Your profile is stored securely in our database. Other people see only your nickname during introductions."}</p></div>
+            <div className={styles.intro}><p className={styles.kicker}>One last thing</p><h1 id="privacy-title" tabIndex={-1}>Your data, your choice.</h1><p>Your profile is stored in our database. Other people see only your nickname during introductions.</p></div>
             <div className={styles.privacyBlock}>
-              {demoMode ? <p>Demo activity is not included in real analytics. The demo dashboard uses illustrative numbers.</p> : initial ? <p>Manage your usage analytics choice in <Link href="/analytics/consent">privacy settings</Link>.</p> : <><label className={styles.consent}><input type="checkbox" checked={analyticsConsent} onChange={(event) => setAnalyticsConsent(event.target.checked)} /><span>Allow usage events to be included in aggregated analytics.</span></label><Link href="/analytics/consent" target="_blank">Learn about analytics</Link></>}
+              {initial ? <p>Manage your usage analytics choice in <Link href="/analytics/consent">privacy settings</Link>.</p> : <><label className={styles.consent}><input type="checkbox" checked={analyticsConsent} onChange={(event) => setAnalyticsConsent(event.target.checked)} /><span>Allow usage events to be included in aggregated analytics.</span></label><Link href="/analytics/consent" target="_blank">Learn about analytics</Link></>}
             </div>
             <p className={styles.answerCount}>{answered} of {QUESTIONS.length} questions answered</p>
             <p className={styles.helper}>Your answers help suggest introductions; they can’t predict chemistry.</p>
           </section>}
 
-          {!sampleError && error && <div className={styles.error} role="alert"><p>{error}</p>{step === lastStep && answered < 3 && <button type="button" onClick={() => goToStep(1)}>Review questions</button>}</div>}
+          {error && <div className={styles.error} role="alert"><p>{error}</p>{step === lastStep && answered < 3 && <button type="button" onClick={() => goToStep(1)}>Review questions</button>}</div>}
           <div className={styles.submitRow}>
             {step > 0 && <button className={styles.backButton} type="button" onClick={() => goToStep(step - 1)}>Back</button>}
             <button className={styles.primary} disabled={saving} type="submit">{saving ? "Saving…" : step < lastStep ? "Continue" : initial ? "Save preferences" : "See introductions"}</button>

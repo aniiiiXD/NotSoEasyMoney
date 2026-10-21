@@ -40,6 +40,13 @@ try {
   const actualDatabase = (await db.query("SELECT current_database() AS name")).rows[0].name;
   assert.equal(actualDatabase, dbName);
   verifiedTestDatabase = true;
+  const oldDemo = await session("demo:11111111-1111-4111-8111-111111111111");
+  assert.equal((await request("/api/profile", { headers: { cookie: oldDemo } })).status, 401);
+  assert.equal((await request("/preview")).headers.get("location"), "/sign-in");
+  assert.equal((await request("/demo/analytics")).headers.get("location"), "/sign-in");
+  const landing = await (await request("/")).text();
+  assert.doesNotMatch(landing, /Try the demo|scripted replies/);
+  console.log("PASS demo links redirect to sign-in and old demo sessions are rejected");
   const created = spawnSync(process.execPath, ["scripts/referrals.mjs", "create", code, "Test creator"], { env: process.env, encoding: "utf8" });
   assert.equal(created.status, 0, "Referral CLI must create the code");
   assert.match(created.stdout, new RegExp(`/r/${code}/qr`));

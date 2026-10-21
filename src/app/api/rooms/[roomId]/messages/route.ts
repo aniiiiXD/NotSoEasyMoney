@@ -51,5 +51,5 @@ export async function POST(request: Request, { params }: Context) {
     const error = result.reason === "not_found" ? "Conversation unavailable." : result.reason === "rate_limited" ? "Please slow down and try again." : "Write a message of up to 2,000 characters.";
     return Response.json({ error }, { status });
   }
-  return Response.json({ message: result.message, ...(result.sampleReply ? { sampleReply: result.sampleReply } : {}) }, { status: 201, headers: { "Cache-Control": "private, no-store" } });
+  return Response.json({ message: result.message }, { status: 201, headers: { "Cache-Control": "private, no-store" } });
 }

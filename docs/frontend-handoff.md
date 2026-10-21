@@ -1,6 +1,6 @@
 # Frontend handoff
 
-Mystery Match is a Next.js App Router prototype. The deployed site at https://mystery-match-ani.vercel.app has a fictional account-free demo and a separate authenticated flow backed by Neon Postgres. Google sign-in is currently restricted to the test users configured in Google Cloud.
+Mystery Match is a Next.js App Router prototype. The deployed site at https://mystery-match-ani.vercel.app uses Google sign-in and Neon Postgres. Google sign-in is currently restricted to the test users configured in Google Cloud.
 
 ## Current flow
 
@@ -9,7 +9,7 @@ Mystery Match is a Next.js App Router prototype. The deployed site at https://my
 3. Browse blind introductions at `/discover` and choose **Say hello** or **Pass**. Both people must choose each other for a room to open.
 4. See rooms at `/chat`, open a conversation at `/chat/[roomId]`, send text messages, or block the other person.
 
-The hosted `/preview` is fictional and resets on refresh. It does not demonstrate real accounts or live conversations. The authenticated chat persists in Neon and checks room membership on reads and writes. The current client polls about every five seconds; it does not use live push or WebSockets. Rooms currently return the latest 100 messages. Blocking closes a room for both people. Message text is limited to 2,000 characters; server rate limiting can return HTTP 429.
+The authenticated chat persists in Neon and checks room membership on reads and writes. The current client polls about every five seconds; it does not use live push or WebSockets. Rooms currently return the latest 100 messages. Blocking closes a room for both people. Message text is limited to 2,000 characters; server rate limiting can return HTTP 429.
 
 ## API endpoints
 

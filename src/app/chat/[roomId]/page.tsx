@@ -14,6 +14,5 @@ export default async function RoomPage({ params }: { params: Promise<{ roomId: s
   const room = await readRoom(session.user.id, roomId);
   if (!room) notFound();
   async function logout() { "use server"; await signOut({ redirectTo: "/" }); }
-  const demoMode = process.env.NODE_ENV === "development" && session.user.id.startsWith("demo:");
-  return <ChatClient key={roomId} initialRooms={await listRooms(session.user.id)} selected={{ id: roomId, ...room }} logout={logout} demoMode={demoMode} />;
+  return <ChatClient key={roomId} initialRooms={await listRooms(session.user.id)} selected={{ id: roomId, ...room }} logout={logout} />;
 }

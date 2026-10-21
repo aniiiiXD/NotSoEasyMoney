@@ -71,7 +71,7 @@ export function createAuthCallbacks({ readPendingReferral, registerGoogleAccount
     ...authCallbacks,
     async jwt(params) {
       const token = authCallbacks.jwt(params);
-      if (!token) return null;
+      if (!token || (typeof token.userId === "string" && !token.userId.startsWith("google:"))) return null;
       if (params.account?.provider === "google" && typeof token.userId === "string") {
         try {
           const code = await readPendingReferral();

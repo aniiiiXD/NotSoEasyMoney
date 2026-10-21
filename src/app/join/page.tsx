@@ -12,6 +12,5 @@ export default async function JoinPage({ searchParams }: { searchParams: Promise
   const { edit } = await searchParams;
   if (profile && hasAnswers(profile.answers) && edit !== "1") redirect("/discover");
   async function logout() { "use server"; await signOut({ redirectTo: "/" }); }
-  const demoMode = process.env.NODE_ENV === "development" && userId.startsWith("demo:");
-  return <ProfileForm initial={profile} logout={logout} demoMode={demoMode} />;
+  return <ProfileForm initial={profile} logout={logout} />;
 }

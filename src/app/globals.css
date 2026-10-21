@@ -774,7 +774,7 @@ button, input, textarea, select {
   .hero {
     display: grid;
     min-height: 680px;
-    grid-template-columns: minmax(0, 1.15fr) minmax(340px, .85fr);
+    grid-template-columns: minmax(0, 760px);
     align-items: center;
     gap: 72px;
   }
@@ -808,6 +808,7 @@ button, input, textarea, select {
   }
 
   .reveal-grid {
+    grid-template-columns: minmax(0, 760px);
     align-items: center;
   }
 

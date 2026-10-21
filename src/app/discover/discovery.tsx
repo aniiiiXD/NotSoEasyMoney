@@ -8,7 +8,7 @@ import styles from "../app.module.css";
 type ChoiceResult = { status: "matched" | "pending"; roomId?: string };
 type PendingChoice = { candidateId: string; decision: "like" | "pass" };
 
-export default function Discovery({ alias, initial, localTesting, demoMode, logout }: { alias: string; initial: Candidate[]; localTesting: boolean; demoMode: boolean; logout: () => Promise<void> }) {
+export default function Discovery({ alias, initial, logout }: { alias: string; initial: Candidate[]; logout: () => Promise<void> }) {
   const [candidates, setCandidates] = useState(initial);
   const [busy, setBusy] = useState<PendingChoice | null>(null);
   const [results, setResults] = useState<Record<string, ChoiceResult>>({});
@@ -54,7 +54,6 @@ export default function Discovery({ alias, initial, localTesting, demoMode, logo
     </header>
     <main className={styles.discovery}>
       <div className={styles.discoveryHeader}><p className={styles.kicker}>Your introductions</p><h1>Good to see you, {alias}.</h1><p>Get to know someone, one conversation at a time.</p></div>
-      {demoMode && <div className={styles.demoNote}><p><strong>Local demo.</strong> These profiles are fictional. Say hello to try a match and a scripted conversation.</p><Link href="/demo/analytics">See sample analytics →</Link></div>}
       {notice && <p className={styles.notice} role="status">{notice}</p>}
       {candidates.length > 0 ? <div className={styles.candidateGrid}>{candidates.map((candidate) => {
         const result = results[candidate.candidateId];
@@ -68,14 +67,14 @@ export default function Discovery({ alias, initial, localTesting, demoMode, logo
           </div>
         </article>;
         return <article className={styles.candidate} key={candidate.candidateId} aria-busy={busy?.candidateId === candidate.candidateId}>
-          <p className={styles.candidateLabel}>{demoMode ? "Sample introduction" : "A new introduction"}</p><h2>{candidate.blindAlias}</h2><p className={styles.candidateDescription}>{candidate.explanation}</p>
+          <p className={styles.candidateLabel}>A new introduction</p><h2>{candidate.blindAlias}</h2><p className={styles.candidateDescription}>{candidate.explanation}</p>
           {error?.candidateId === candidate.candidateId && <p className={styles.candidateError} role="alert">{error.message}</p>}
           <div className={styles.candidateActions}>
             <button type="button" disabled={!!busy} onClick={() => choose(candidate.candidateId, "pass")}>{busy?.candidateId === candidate.candidateId && busy.decision === "pass" ? "Passing…" : "Pass"}</button>
             <button type="button" disabled={!!busy} onClick={() => choose(candidate.candidateId, "like")}>{busy?.candidateId === candidate.candidateId && busy.decision === "like" ? "Sending…" : "Say hello"}</button>
           </div>
         </article>;
-      })}</div> : <div className={styles.empty}><div className={styles.emptyMark} aria-hidden="true"><span /><span /></div><h2>{demoMode ? "You’ve seen the sample introductions." : "No introductions just yet."}</h2><p>{demoMode ? "Visit your conversations, or sign out and start a fresh demo to see them again." : <>When someone with overlapping preferences joins, you’ll find them here.{localTesting ? " To try a match locally, create a second account in a private browser window." : ""}</>}</p><Link className={styles.secondary} href={demoMode ? "/chat" : "/join?edit=1"}>{demoMode ? "Open conversations" : "Review your preferences"}</Link></div>}
+      })}</div> : <div className={styles.empty}><div className={styles.emptyMark} aria-hidden="true"><span /><span /></div><h2>No introductions just yet.</h2><p>When someone with overlapping preferences joins, you’ll find them here.</p><Link className={styles.secondary} href="/join?edit=1">Review your preferences</Link></div>}
     </main>
   </div>;
 }

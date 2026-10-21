@@ -2,7 +2,7 @@
 
 A Next.js prototype for getting to know someone before seeing their photo. Adults can create a nickname, answer connection-preference questions, receive blind introductions, and open a private chat after both people choose each other.
 
-The [Vercel preview](https://mystery-match-ani.vercel.app) includes a fictional, account-free demo. The deployed application uses Neon Postgres for profiles, matching, chat, referrals, and opt-in analytics. Google sign-in has been tested through account registration on the deployed site, but Google currently permits only configured test users. This is not ready for a public launch. For frontend integration, see the [frontend handoff](docs/frontend-handoff.md).
+The [deployed application](https://mystery-match-ani.vercel.app) uses Neon Postgres for profiles, matching, chat, referrals, and opt-in analytics. Google sign-in has been tested through account registration on the deployed site, but Google currently permits only configured test users. This is not ready for a public launch. For frontend integration, see the [frontend handoff](docs/frontend-handoff.md).
 
 ## Run locally
 
@@ -23,17 +23,7 @@ npm run dev
 
 The migration command reads `DATABASE_URL_UNPOOLED`, applies pending files in `migrations/`, and checks previously applied migration checksums. The development server binds to `127.0.0.1` and starts at port 3000; if that port is busy, Next.js selects another. To choose a port explicitly, use `npm run dev -- -p 3002`.
 
-## Try the demo
-
-On the hosted preview, choose **Try the demo** to walk through a fictional, account-free flow. Its introductions, messages, and analytics are illustrative; the browser demo resets when the page is refreshed.
-
-On the local sign-in page, choose **Try the local demo** to start a fresh session without Google credentials. In the profile wizard, **Explore with a sample profile** takes you straight to fictional introductions. To walk through the questions, choose **Use sample answers and review the questions**, or enter your own answers. Say hello to a sample introduction to open a mutual match and go directly to its conversation; messages receive a scripted sample reply. The **Sample analytics** link shows illustrative numbers, not live activity. Signing out and starting a new demo creates a fresh session.
-
-The local sign-in demo is available only in development on a loopback address and needs `AUTH_SECRET` and a migrated database. Although the demo runs locally, its demo profiles and conversations are stored in the configured Neon database. Sample profiles are private to their demo session and are never shown to ordinary accounts; demo activity is excluded from real analytics. Use a separate development database if you do not want demo data mixed with other data.
-
-With `LOCAL_TEST_LOGIN=true`, expand **Use a local test account** on the sign-in page for development-only test accounts. Enter a new handle and a passphrase of at least eight characters to create one; use the same passphrase to return. To try a match, create a second account in a separate browser profile or private window, give each account mutually compatible age and gender preferences, answer at least three of the same questions, and choose “Say hello” from both accounts. A conversation appears for both people. Chats refresh about every five seconds. Blocking someone closes the room for both people.
-
-Profiles, messages, and settings are stored in the configured hosted database. Restrict database access and protect its credentials; chat messages and profiles are not end-to-end encrypted. Local test accounts are disabled outside development.
+Profiles, messages, and settings are stored in the configured hosted database. Restrict database access and protect its credentials; chat messages and profiles are not end-to-end encrypted.
 
 ## Google sign-in
 
@@ -54,7 +44,7 @@ npm run referrals -- disable CREATOR1
 npm run referrals -- enable CREATOR1
 ```
 
-The create command prints an invitation link at `/r/CREATOR1` and a QR image at `/r/CREATOR1/qr`. Codes are 3–32 letters, numbers, hyphens, or underscores, beginning with a letter or number; they are normalized to uppercase. A visitor can remove an invitation before signing in. The first valid invitation is held for up to 30 days and is credited only when a Google account is first registered while the code remains active. Returning Google accounts, local test accounts, and demo sessions do not create referral signups. The list command separately shows attributed Google signups and how many subsequently created a profile; it does not count link clicks.
+The create command prints an invitation link at `/r/CREATOR1` and a QR image at `/r/CREATOR1/qr`. Codes are 3–32 letters, numbers, hyphens, or underscores, beginning with a letter or number; they are normalized to uppercase. A visitor can remove an invitation before signing in. The first valid invitation is held for up to 30 days and is credited only when a Google account is first registered while the code remains active. Returning Google accounts do not create referral signups. The list command separately shows attributed Google signups and how many subsequently created a profile; it does not count link clicks.
 
 Referral attribution is stored separately from opt-in usage analytics and associates the account ID with a code. The operator dashboard and CLI show exact counts without the analytics dashboard's small-group suppression; there is no influencer-facing reporting portal. Share these counts and protect access accordingly.
 

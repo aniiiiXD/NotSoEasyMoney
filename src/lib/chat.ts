@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { getDb, lockProfiles, withTransaction } from "./db.ts";
 import { recordRoomEventInTransaction } from "./analytics.ts";
-import { isSampleForViewer } from "./demo.ts";
+import { isReservedDemoIdentity } from "./demo.ts";
 
 type RoomPair = { user_a: string; user_b: string };
 type LockedRoom = RoomPair & { other_id: string };
@@ -23,6 +23,8 @@ export type ChatMessage = { id: string; body: string; mine: boolean; createdAt: 
 const allowedRoom = `
   r.active = 1
   AND (r.user_a = $1 OR r.user_b = $1)
+  AND substr(r.user_a, 1, 5) <> 'demo:' AND substr(r.user_a, 1, 7) <> 'sample:'
+  AND substr(r.user_b, 1, 5) <> 'demo:' AND substr(r.user_b, 1, 7) <> 'sample:'
   AND me.active = 1 AND other.active = 1
   AND NOT EXISTS (
     SELECT 1 FROM blocks b
@@ -93,14 +95,8 @@ export async function readRoom(userId: string, roomId: string): Promise<{ alias:
 }
 
 export type SendMessageResult =
-  | { ok: true; message: ChatMessage; sampleReply?: ChatMessage }
+  | { ok: true; message: ChatMessage }
   | { ok: false; reason: "not_found" | "invalid" | "rate_limited" };
-
-const SAMPLE_REPLIES = [
-  "Demo reply: Hi! What does a really good weekend look like for you?",
-  "Demo reply: I like that. What is something you could talk about for hours?",
-  "Demo reply: Thanks for sharing. What is a small thing that made you smile lately?",
-];
 
 export async function sendMessage(userId: string, roomId: string, input: unknown): Promise<SendMessageResult> {
   if (typeof input !== "string") return { ok: false, reason: "invalid" };
@@ -121,34 +117,15 @@ export async function sendMessage(userId: string, roomId: string, input: unknown
     if (Number(recent[0].count) >= 30) return { ok: false, reason: "rate_limited" };
 
     const id = randomUUID();
-    const isSample = isSampleForViewer(userId, room.other_id);
-    // Preserve sample-reply order even when multiple writes share a millisecond.
-    const lastMessage = isSample
-      ? (await client.query<{ time: string | null }>("SELECT max(created_at) AS time FROM messages WHERE room_id = $1", [roomId])).rows[0]
-      : null;
-    const lastTime = lastMessage?.time ? Date.parse(lastMessage.time) : 0;
-    const timestamp = isSample && Number.isFinite(lastTime) ? Math.max(Date.now(), lastTime + 1) : Date.now();
-    const createdAt = new Date(timestamp).toISOString();
+    const createdAt = new Date().toISOString();
     await client.query(
       "INSERT INTO messages (id, room_id, sender_id, body, created_at) VALUES ($1, $2, $3, $4, $5)",
       [id, roomId, userId, body, createdAt],
     );
-    let sampleReply: ChatMessage | undefined;
-    if (isSample) {
-      const { rows: count } = await client.query<{ count: string }>(
-        "SELECT count(*) AS count FROM messages WHERE room_id = $1 AND sender_id = $2",
-        [roomId, room.other_id],
-      );
-      sampleReply = { id: randomUUID(), body: SAMPLE_REPLIES[Number(count[0].count) % SAMPLE_REPLIES.length], mine: false, createdAt: new Date(timestamp + 1).toISOString() };
-      await client.query(
-        "INSERT INTO messages (id, room_id, sender_id, body, created_at) VALUES ($1, $2, $3, $4, $5)",
-        [sampleReply.id, roomId, room.other_id, sampleReply.body, sampleReply.createdAt],
-      );
-    }
     // The helper uses a savepoint: optional analytics failure cannot undo the
     // message, and consent is checked while both profile locks are still held.
     await recordRoomEventInTransaction(client, userId, roomId, "message_sent");
-    return { ok: true, message: { id, body, mine: true, createdAt }, ...(sampleReply ? { sampleReply } : {}) };
+    return { ok: true, message: { id, body, mine: true, createdAt } };
   });
 }
 
@@ -175,7 +152,7 @@ export async function reportRoom(userId: string, roomId: string, reason: unknown
   return withTransaction(getDb(), async (client) => {
     const room = await lockAllowedRoom(client, userId, roomId);
     if (!room) return "not_found";
-    if (isSampleForViewer(userId, room.other_id)) return "not_found";
+    if (isReservedDemoIdentity(userId) || isReservedDemoIdentity(room.other_id)) return "not_found";
     await client.query(
       "INSERT INTO safety_reports (id, reporter_id, reported_id, room_id, reason) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (reporter_id, room_id) DO NOTHING",
       [randomUUID(), userId, room.other_id, roomId, reason],

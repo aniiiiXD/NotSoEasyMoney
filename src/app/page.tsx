@@ -1,38 +1,9 @@
 import Link from "next/link";
-import { SAMPLE_PROFILES, SAMPLE_VIEWER_ANSWERS } from "@/lib/demo";
-import { normalizeAnswers, QUESTION_IDS, QUESTIONS, type PersonalityQuestionId } from "@/lib/personality";
-
-// A few of the twenty questions, with short labels for the illustrative vector card.
-const SHOWN: { id: PersonalityQuestionId; label: string }[] = [
-  { id: "life_of_party", label: "Life of the party" },
-  { id: "feel_emotions", label: "Feels others' emotions" },
-  { id: "like_order", label: "Likes order" },
-  { id: "upset_easily", label: "Gets upset easily" },
-  { id: "vivid_imagination", label: "Vivid imagination" },
-  { id: "horror_movies", label: "Likes horror movies" },
-];
-
-// The demo's sample answers compared with a fictional profile, using every question.
-function exampleComparison() {
-  const sample = SAMPLE_PROFILES[0];
-  const you = normalizeAnswers(SAMPLE_VIEWER_ANSWERS);
-  const them = normalizeAnswers(sample.answers);
-  const difference = QUESTION_IDS.reduce((total, id) => total + Math.abs((you[id] ?? 0) - (them[id] ?? 0)), 0);
-  return {
-    alias: sample.alias.replace(" (sample)", ""),
-    rows: SHOWN.map(({ id, label }) => ({ id, label, you: you[id] ?? 0, them: them[id] ?? 0 })),
-    similarity: Math.round((1 - difference / QUESTION_IDS.length) * 100),
-  };
-}
+import { QUESTIONS } from "@/lib/personality";
 
 export default function Home() {
-  const demoAvailable = process.env.NODE_ENV === "development" && Boolean(process.env.AUTH_SECRET);
-  const hostedPreview = Boolean(process.env.VERCEL);
-  const startHref = hostedPreview ? "/preview" : "/join";
-  const startLabel = hostedPreview ? "Try the demo" : "Get started";
-  const heroHref = hostedPreview ? "/preview" : demoAvailable ? "/sign-in" : "/join";
-  const heroLabel = hostedPreview || demoAvailable ? "Try the demo" : "Take the questionnaire";
-  const comparison = exampleComparison();
+  const startHref = "/join";
+  const startLabel = "Get started";
 
   return (
     <div className="landing" id="top">
@@ -59,38 +30,11 @@ export default function Home() {
               <h1 id="hero-title">No photos. <em>Just the person.</em></h1>
               <p className="hero-description">Everyone sees the same questionnaire and sets their dating preferences. Answer at least three questions and skip the rest if you like. We compare your answers to suggest introductions. You talk here, and only swap socials if you both want to.</p>
               <div className="hero-actions">
-                <Link className="landing-button" href={heroHref}>{heroLabel}</Link>
+                <Link className="landing-button" href="/join">Take the questionnaire</Link>
                 <a className="landing-text-link" href="#how-it-works">See how matching works <span aria-hidden="true">↓</span></a>
               </div>
-              {(demoAvailable || hostedPreview) && <p className="demo-hint">The demo uses fictional profiles and scripted replies.</p>}
             </div>
 
-            <figure className="vector-card" aria-labelledby="vector-caption">
-              <div className="vector-card-top">
-                <span id="vector-caption">Two profiles, as vectors</span>
-                <span className="vector-tag">Example</span>
-              </div>
-              <div className="vector-legend" aria-hidden="true">
-                <span><i className="dot dot-you" />You</span>
-                <span><i className="dot dot-them" />{comparison.alias}</span>
-              </div>
-              <ul className="vector-rows">
-                {comparison.rows.map((row) => (
-                  <li key={row.id}>
-                    <div className="vector-row-label"><span>{row.label}</span><span className="vector-range">Not me to Very me</span></div>
-                    <div className="vector-track" aria-hidden="true">
-                      <i className="dot dot-them" style={{ left: `${row.them * 100}%` }} />
-                      <i className="dot dot-you" style={{ left: `${row.you * 100}%` }} />
-                    </div>
-                  </li>
-                ))}
-              </ul>
-              <div className="vector-result">
-                <span>Similarity</span>
-                <strong>{comparison.similarity}%</strong>
-              </div>
-              <p className="vector-footnote">Showing 6 of {QUESTIONS.length} questions. No photo, name, or face anywhere in the comparison.</p>
-            </figure>
           </div>
         </section>
 
@@ -172,17 +116,7 @@ export default function Home() {
             <div className="reveal-copy">
               <p className="section-label">Socials, later</p>
               <h2 id="reveal-title">Share your socials only if you both want to.</h2>
-              <p>Every conversation starts anonymous. When it feels right, either of you can offer to swap socials. They&apos;re only revealed if both of you agree. Until then, you&apos;re just two nicknames talking.</p>
-            </div>
-            <div className="chat-mock" aria-hidden="true">
-              <div className="chat-mock-top"><span className="avatar-blank">S</span><div><strong>Sage</strong><span>Matched by similarity</span></div></div>
-              <p className="bubble bubble-them">Okay, a bookshop then a long dinner. That&apos;s my perfect Sunday too.</p>
-              <p className="bubble bubble-you">Honestly, this is the best conversation I&apos;ve had on a dating app.</p>
-              <div className="swap-card">
-                <span className="swap-icon">@</span>
-                <div><strong>Swap socials?</strong><span>Shared only if you both say yes</span></div>
-                <div className="swap-status"><span className="swap-yes">You ✓</span><span>Sage …</span></div>
-              </div>
+              <p>Every conversation starts with nicknames. If you both feel comfortable, you can choose to share your socials in your conversation.</p>
             </div>
           </div>
         </section>

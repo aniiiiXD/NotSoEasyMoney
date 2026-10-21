@@ -13,8 +13,6 @@ export default async function DiscoverPage() {
   if (!profile) redirect("/join");
   if (!hasAnswers(profile.answers)) redirect("/join?edit=1");
   const candidates = await listCandidates(db, userId) ?? [];
-  const localTesting = process.env.NODE_ENV === "development" && process.env.LOCAL_TEST_LOGIN === "true";
-  const demoMode = process.env.NODE_ENV === "development" && userId.startsWith("demo:");
   async function logout() { "use server"; await signOut({ redirectTo: "/" }); }
-  return <Discovery alias={profile.alias} initial={candidates} localTesting={localTesting} demoMode={demoMode} logout={logout} />;
+  return <Discovery alias={profile.alias} initial={candidates} logout={logout} />;
 }

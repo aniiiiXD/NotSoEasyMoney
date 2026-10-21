@@ -11,7 +11,6 @@ export default async function ChatPage({ searchParams }: { searchParams: Promise
   const profile = (await getDb().query<{ active: number }>("SELECT active FROM profiles WHERE user_id = $1", [session.user.id])).rows[0];
   if (!profile?.active) redirect("/join");
   async function logout() { "use server"; await signOut({ redirectTo: "/" }); }
-  const demoMode = process.env.NODE_ENV === "development" && session.user.id.startsWith("demo:");
   const { reported } = await searchParams;
-  return <>{reported === "1" && <p role="status" style={{ padding: "12px 20px", margin: 0 }}>Your report was submitted and the conversation is closed.</p>}<ChatClient key="inbox" initialRooms={await listRooms(session.user.id)} selected={null} logout={logout} demoMode={demoMode} /></>;
+  return <>{reported === "1" && <p role="status" style={{ padding: "12px 20px", margin: 0 }}>Your report was submitted and the conversation is closed.</p>}<ChatClient key="inbox" initialRooms={await listRooms(session.user.id)} selected={null} logout={logout} /></>;
 }
