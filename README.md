@@ -2,7 +2,7 @@
 
 A Next.js prototype for getting to know someone before seeing their photo. Adults can create a nickname, answer connection-preference questions, receive blind introductions, and open a private chat after both people choose each other.
 
-The [Vercel preview](https://mystery-match-ani.vercel.app) includes a fictional, account-free demo. The application now uses Neon Postgres for persistent profiles, matching, chat, referrals, and opt-in analytics. Google OAuth has not yet been configured or tested end to end, and the Neon-backed code and environment must be deployed before relying on those features in the preview. This is not ready for a public launch.
+The [Vercel preview](https://mystery-match-ani.vercel.app) includes a fictional, account-free demo. The deployed application uses Neon Postgres for profiles, matching, chat, referrals, and opt-in analytics. Google sign-in has been tested through account registration on the deployed site, but Google currently permits only configured test users. This is not ready for a public launch. For frontend integration, see the [frontend handoff](docs/frontend-handoff.md).
 
 ## Run locally
 
@@ -37,7 +37,7 @@ Profiles, messages, and settings are stored in the configured hosted database. R
 
 ## Google sign-in
 
-Google sign-in is implemented but its OAuth client has not yet been configured or tested end to end. It requires a migrated database, an `AUTH_SECRET`, and Google OAuth credentials. For setup and troubleshooting, see [Set up Google sign-in](docs/google-auth.md).
+Google sign-in is configured on the production deployment and has been tested through the profile setup screen and account registration. The Google app is in Testing mode, so sign-in is limited to its listed test users. It requires a migrated database, an `AUTH_SECRET`, and Google OAuth credentials. For setup and troubleshooting, see [Set up Google sign-in](docs/google-auth.md).
 
 For local development, create a Google OAuth **Web application** client, add your Google account as a test user if the app is in testing, and register the exact callback URL for your local host and port, such as `http://127.0.0.1:3002/api/auth/callback/google`. Add the client ID and secret as `AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET` in `.env.local` and restart. Leave `AUTH_URL` and `NEXTAUTH_URL` unset for this local setup. Google identity details are not shown in blind introductions; the application uses the provider subject to associate the login with the account.
 
