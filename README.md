@@ -33,7 +33,7 @@ For local development, create a Google OAuth **Web application** client, add you
 
 ## Influencer referrals
 
-The private `/admin/referrals` dashboard lets authorized operators create links, view signup and profile counts, open QR codes, and disable or re-enable invitations. Set `REFERRAL_ADMIN_USER_IDS` to a comma-separated list of the exact authenticated Google user IDs (`google:` followed by the provider subject); an empty list denies everyone. Give access only to trusted operators, because the dashboard shows exact counts. Set `APP_URL` to the public HTTPS origin, or a loopback HTTP origin for local testing; it determines the invitation and QR destinations.
+The unlisted `/admin/referrals` dashboard lets anyone with the URL create links, view signup and profile counts, open QR codes, and disable or re-enable invitations. Keep the URL private if you do not want other people to manage links. The support inbox remains protected by `REFERRAL_ADMIN_USER_IDS`; set it to a comma-separated list of the exact authenticated Google user IDs (`google:` followed by the provider subject). Set `APP_URL` to the public HTTPS origin, or a loopback HTTP origin for local testing; it determines the invitation and QR destinations.
 
 Codes can also be managed from a trusted operator environment with `DATABASE_URL` set:
 
@@ -46,7 +46,7 @@ npm run referrals -- enable CREATOR1
 
 The create command prints an invitation link at `/r/CREATOR1` and a QR image at `/r/CREATOR1/qr`. Codes are 3–32 letters, numbers, hyphens, or underscores, beginning with a letter or number; they are normalized to uppercase. A visitor can remove an invitation before signing in. The first valid invitation is held for up to 30 days and is credited only when a Google account is first registered while the code remains active. Returning Google accounts do not create referral signups. The list command separately shows attributed Google signups and how many subsequently created a profile; it does not count link clicks.
 
-Referral attribution is stored separately from opt-in usage analytics and associates the account ID with a code. The operator dashboard and CLI show exact counts without the analytics dashboard's small-group suppression; there is no influencer-facing reporting portal. Share these counts and protect access accordingly.
+Referral attribution is stored separately from opt-in usage analytics and associates the account ID with a code. The unlisted operator dashboard and CLI show exact counts without the analytics dashboard's small-group suppression; there is no influencer-facing reporting portal. Share the dashboard URL carefully because it has write access.
 
 ## Safety reports
 
@@ -54,7 +54,7 @@ Members can report and block the other person from an open conversation. Reporti
 
 ## Support and account deletion
 
-Signed-in members can open **Account & support** to send a support ticket or delete their account. Tickets ask for a reply email and are visible at `/admin/support` to the same allowlisted operators as the referral dashboard; operators must check the page and reply manually, as there are no notifications or in-app replies. Deleting an account removes its profile, referral attribution, support tickets, matches, conversations and related messages and reports, and clears analytics as described below. This also removes the affected conversations for the other members. Database backups may retain past data according to the database provider's retention policy. The deletion invalidates existing Google sessions; signing in again starts a new account.
+Signed-in members can open **Account & support** to send a support ticket or delete their account. Tickets ask for a reply email and are visible at `/admin/support` to operators listed in `REFERRAL_ADMIN_USER_IDS`; operators must check the page and reply manually, as there are no notifications or in-app replies. Deleting an account removes its profile, referral attribution, support tickets, matches, conversations and related messages and reports, and clears analytics as described below. This also removes the affected conversations for the other members. Database backups may retain past data according to the database provider's retention policy. The deletion invalidates existing Google sessions; signing in again starts a new account.
 
 ## Matching and analytics
 

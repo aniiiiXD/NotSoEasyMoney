@@ -52,24 +52,20 @@ try {
   assert.match(created.stdout, new RegExp(`/r/${code}/qr`));
   await db.query("INSERT INTO referral_codes (code, label) VALUES ($1, 'Other creator')", [secondCode]);
 
-  await db.query("INSERT INTO app_users (user_id) VALUES ('google:e2e-admin'), ('google:e2e-outsider') ON CONFLICT DO NOTHING");
-  const admin = await session("google:e2e-admin");
-  const outsider = await session("google:e2e-outsider");
-  assert.equal((await request("/api/admin/referrals")).status, 401);
-  assert.equal((await request("/api/admin/referrals", { headers: { cookie: outsider } })).status, 403);
-  assert.equal((await request("/admin/referrals", { headers: { cookie: outsider } })).status, 404);
-  assert.equal((await request("/api/admin/referrals", { method: "POST", headers: { cookie: admin, origin: "https://evil.example", "content-type": "application/json" }, body: JSON.stringify({ code: dashboardCode, label: "Test" }) })).status, 403);
-  const dashboard = await request("/admin/referrals", { headers: { cookie: admin } });
+  assert.equal((await request("/api/admin/referrals")).status, 200);
+  assert.equal((await request("/admin/referrals")).status, 200);
+  assert.equal((await request("/api/admin/referrals", { method: "POST", headers: { origin: "https://evil.example", "content-type": "application/json" }, body: JSON.stringify({ code: dashboardCode, label: "Test" }) })).status, 403);
+  const dashboard = await request("/admin/referrals");
   assert.equal(dashboard.status, 200);
   assert.match(await dashboard.text(), /Influencer links/);
-  assert.ok((await json("/api/admin/referrals", admin, "POST", { code: dashboardCode.toLowerCase(), label: "Dashboard creator" })).referrals.some((item) => item.code === dashboardCode && item.active));
-  assert.equal((await request("/api/admin/referrals", { method: "POST", headers: { cookie: admin, origin, "content-type": "application/json" }, body: JSON.stringify({ code: dashboardCode, label: "Duplicate" }) })).status, 409);
+  assert.ok((await json("/api/admin/referrals", "", "POST", { code: dashboardCode.toLowerCase(), label: "Dashboard creator" })).referrals.some((item) => item.code === dashboardCode && item.active));
+  assert.equal((await request("/api/admin/referrals", { method: "POST", headers: { origin, "content-type": "application/json" }, body: JSON.stringify({ code: dashboardCode, label: "Duplicate" }) })).status, 409);
   assert.equal((await request(`/r/${dashboardCode}/qr`)).status, 200);
-  await json("/api/admin/referrals", admin, "PATCH", { code: dashboardCode, active: false });
+  await json("/api/admin/referrals", "", "PATCH", { code: dashboardCode, active: false });
   assert.equal((await request(`/r/${dashboardCode}/qr`)).status, 404);
-  await json("/api/admin/referrals", admin, "PATCH", { code: dashboardCode, active: true });
+  await json("/api/admin/referrals", "", "PATCH", { code: dashboardCode, active: true });
   assert.equal((await request(`/r/${dashboardCode}/qr`)).status, 200);
-  console.log("PASS private dashboard access, create, duplicate rejection, QR, disable and re-enable");
+  console.log("PASS public unlisted dashboard access, create, duplicate rejection, QR, disable and re-enable");
 
   const invite = await request(`/r/${code}`);
   assert.equal(invite.status, 307);
@@ -134,10 +130,13 @@ try {
   const attribution = (await db.query("SELECT code, profile_completed_at FROM referral_attributions WHERE user_id = $1", [users[0]])).rows[0];
   assert.equal(attribution.code, code);
   assert.ok(attribution.profile_completed_at);
-  const summary = (await json("/api/admin/referrals", admin)).referrals.find((item) => item.code === code);
+  const summary = (await json("/api/admin/referrals", "")).referrals.find((item) => item.code === code);
   assert.equal(summary.signups, 1);
   assert.equal(summary.profiles, 1);
   console.log("PASS dashboard signup and completed-profile counts");
+  await db.query("INSERT INTO app_users (user_id) VALUES ('google:e2e-admin'), ('google:e2e-outsider') ON CONFLICT DO NOTHING");
+  const admin = await session("google:e2e-admin");
+  const outsider = await session("google:e2e-outsider");
   const listing = spawnSync(process.execPath, ["scripts/referrals.mjs", "list"], { env: process.env, encoding: "utf8" });
   assert.equal(listing.status, 0);
   assert.ok(listing.stdout.includes(code));

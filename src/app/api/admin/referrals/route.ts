@@ -1,27 +1,17 @@
-import { auth } from "@/auth";
 import { getDb } from "@/lib/db";
-import { createReferral, isReferralAdmin, listReferralSummaries, setReferralActive } from "@/lib/referrals";
+import { createReferral, listReferralSummaries, setReferralActive } from "@/lib/referrals";
 import { isSameOrigin, readJsonWithLimit, RequestBodyTooLarge } from "@/lib/request";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "private, no-store" };
 
-async function authorize() {
-  const userId = (await auth())?.user?.id;
-  return !userId ? 401 : isReferralAdmin(userId) ? 200 : 403;
-}
-
 export async function GET() {
-  const status = await authorize();
-  if (status !== 200) return Response.json({ error: status === 401 ? "Sign in required." : "Access denied." }, { status, headers });
   try { return Response.json({ referrals: await listReferralSummaries(getDb()) }, { headers }); }
   catch { return Response.json({ error: "Could not load referral links." }, { status: 500, headers }); }
 }
 
 async function mutate(request: Request, method: "create" | "update") {
-  const status = await authorize();
-  if (status !== 200) return Response.json({ error: status === 401 ? "Sign in required." : "Access denied." }, { status, headers });
   if (!isSameOrigin(request)) return Response.json({ error: "Invalid origin." }, { status: 403, headers });
   if (request.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !== "application/json") return Response.json({ error: "Expected JSON." }, { status: 415, headers });
   let body: unknown;

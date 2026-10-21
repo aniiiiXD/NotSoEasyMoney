@@ -28,7 +28,7 @@ These routes use the authenticated session cookie; callers do not supply user ID
 
 See `src/app/chat/chat-client.tsx`, `src/app/discover/discovery.tsx`, and `src/app/join/profile-form.tsx` for existing client behavior. Do not expose database credentials, OAuth secrets, internal user IDs, or private questionnaire vectors to the browser.
 
-Influencer codes are managed by an operator with `npm run referrals`; `/r/[code]` starts an invitation and `/r/[code]/qr` serves its QR image. Attribution is recorded for a newly registered Google account, not for every visit. Opt-in analytics and an admin-only aggregate dashboard exist; there is no influencer dashboard yet.
+Influencer codes are managed from the unlisted `/admin/referrals` dashboard or with `npm run referrals`; `/r/[code]` starts an invitation and `/r/[code]/qr` serves its QR image. Attribution is recorded for a newly registered Google account, not for every visit. The dashboard has write access for anyone who discovers its URL; support and aggregate analytics remain protected.
 
 ## Testing and remaining work
 
