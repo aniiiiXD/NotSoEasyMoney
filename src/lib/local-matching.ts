@@ -81,6 +81,10 @@ export async function saveProfile(db: Pool, userId: string, value: unknown): Pro
   const profile = parseProfileInput(value);
   const vector = normalizeAnswers(profile.answers);
   return withTransaction(db, async (client) => {
+    if (userId.startsWith("google:")) {
+      const account = await client.query("SELECT user_id FROM app_users WHERE user_id = $1 FOR UPDATE", [userId]);
+      if (!account.rowCount) throw new Error("Account unavailable");
+    }
     // All pair-sensitive operations use this same order for profile locks.
     await lockProfiles(client, [userId]);
     const values = [userId, profile.alias, profile.age, profile.gender, JSON.stringify(profile.seeking), profile.minAge, profile.maxAge, JSON.stringify(profile.answers), JSON.stringify(vector), QUESTIONNAIRE_VERSION, profile.analyticsConsent ? 1 : 0];

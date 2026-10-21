@@ -27,7 +27,8 @@ let verifiedTestDatabase = false;
 async function request(path, options = {}) { return fetch(new URL(path, origin), { redirect: "manual", ...options }); }
 async function session(userId) {
   const salt = "authjs.session-token";
-  return `${salt}=${await encode({ secret, salt, token: { userId } })}`;
+  const accountVersion = (await db.query("SELECT session_version FROM app_users WHERE user_id = $1", [userId])).rows[0]?.session_version;
+  return `${salt}=${await encode({ secret, salt, token: { userId, accountVersion } })}`;
 }
 async function json(path, cookie, method = "GET", body) {
   const response = await request(path, { method, headers: { cookie, origin, ...(body === undefined ? {} : { "content-type": "application/json" }) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
@@ -44,6 +45,7 @@ try {
   assert.match(created.stdout, new RegExp(`/r/${code}/qr`));
   await db.query("INSERT INTO referral_codes (code, label) VALUES ($1, 'Other creator')", [secondCode]);
 
+  await db.query("INSERT INTO app_users (user_id) VALUES ('google:e2e-admin'), ('google:e2e-outsider') ON CONFLICT DO NOTHING");
   const admin = await session("google:e2e-admin");
   const outsider = await session("google:e2e-outsider");
   assert.equal((await request("/api/admin/referrals")).status, 401);
@@ -134,12 +136,26 @@ try {
   assert.ok(listing.stdout.includes(code));
   const complete = await request("/signup/complete", { headers: { cookie } });
   assert.ok(complete.headers.getSetCookie().some((value) => value.includes("Max-Age=0")));
+  assert.equal((await request("/api/support", { method: "POST", headers: { origin, "content-type": "application/json" }, body: JSON.stringify({ email: "test@example.com", message: "Please help me with my profile." }) })).status, 401);
+  await json("/api/support", alice, "POST", { email: "test@example.com", message: "Please help me with my profile." });
+  assert.equal((await request("/admin/support", { headers: { cookie: outsider } })).status, 404);
+  const inbox = await request("/admin/support", { headers: { cookie: admin } });
+  assert.equal(inbox.status, 200);
+  assert.match(await inbox.text(), /Please help me with my profile/);
+  assert.equal((await request("/api/account", { method: "DELETE", headers: { cookie: alice, origin: "https://evil.example" } })).status, 403);
+  assert.equal((await request("/api/account", { method: "DELETE", headers: { cookie: alice, origin } })).status, 204);
+  assert.equal((await request("/api/profile", { headers: { cookie: alice } })).status, 401);
+  assert.equal(Number((await db.query("SELECT count(*) FROM support_tickets WHERE user_id = $1", [users[0]])).rows[0].count), 0);
+  assert.equal(Number((await db.query("SELECT count(*) FROM rooms WHERE id = $1", [match.roomId])).rows[0].count), 0);
+  await registerGoogleAccount(db, users[0], null);
+  assert.equal((await request("/api/profile", { headers: { cookie: alice } })).status, 401);
+  console.log("PASS support ticket privacy, account deletion and old-session invalidation after re-registration");
   console.log("PASS simulated Google account registration, referral attribution, profiles, mutual matching, chat, report and block, and analytics consent");
 } finally {
   if (verifiedTestDatabase) {
     await db.query("DELETE FROM profiles WHERE user_id = ANY($1::text[])", [users]);
     await db.query("DELETE FROM analytics_events WHERE user_id = ANY($1::text[])", [users]);
-    await db.query("DELETE FROM app_users WHERE user_id = ANY($1::text[])", [users]);
+    await db.query("DELETE FROM app_users WHERE user_id = ANY($1::text[])", [[...users, "google:e2e-admin", "google:e2e-outsider"]]);
     await db.query("DELETE FROM referral_codes WHERE code = ANY($1::text[])", [[code, secondCode, dashboardCode]]);
   }
   await db.end();

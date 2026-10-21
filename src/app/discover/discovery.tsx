@@ -50,7 +50,7 @@ export default function Discovery({ alias, initial, localTesting, demoMode, logo
   return <div className={styles.page}>
     <header className={styles.header}>
       <div className={styles.headerTop}><Link href="/" className={styles.wordmark}><span className="brand-mark" aria-hidden="true" />Mystery Match</Link><form action={logout}><button className={styles.signOut} type="submit">Sign out</button></form></div>
-      <nav className={styles.appNav} aria-label="Main navigation"><Link href="/discover" aria-current="page">Discover</Link><Link href="/chat">Conversations</Link><Link href="/join?edit=1">Preferences</Link></nav>
+      <nav className={styles.appNav} aria-label="Main navigation"><Link href="/discover" aria-current="page">Discover</Link><Link href="/chat">Conversations</Link><Link href="/join?edit=1">Preferences</Link><Link href="/account">Account & support</Link></nav>
     </header>
     <main className={styles.discovery}>
       <div className={styles.discoveryHeader}><p className={styles.kicker}>Your introductions</p><h1>Good to see you, {alias}.</h1><p>Get to know someone, one conversation at a time.</p></div>

@@ -56,6 +56,7 @@ test("validates the complete adult profile without guessing missing answers", ()
 
 test("creates a blind room only after two eligible people opt in", async () => {
   await reset();
+  await database().query("INSERT INTO app_users (user_id) VALUES ('google:private-a'), ('google:private-b')");
   await saveProfile(database(), "google:private-a", profile);
   await saveProfile(database(), "google:private-b", otherProfile);
   const first = (await listCandidates(database(), "google:private-a"))!;

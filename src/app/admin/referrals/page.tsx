@@ -20,6 +20,7 @@ export default async function ReferralPage() {
       <p className={styles.eyebrow}>PRIVATE · ADMIN ONLY</p>
       <h1>Influencer links.</h1>
       <p className={styles.intro}>Create a unique link for each creator and see the people who sign up through it.</p>
+      <p><Link href="/admin/support">View support tickets →</Link></p>
       <ReferralDashboard initialReferrals={referrals} />
     </div>
   </main>;

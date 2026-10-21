@@ -74,6 +74,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async registerGoogleAccount(userId, code) {
       await registerGoogleAccount(getDb(), userId, code);
     },
+    async accountVersion(userId) {
+      return (await getDb().query<{ session_version: string }>("SELECT session_version FROM app_users WHERE user_id = $1", [userId])).rows[0]?.session_version ?? null;
+    },
   }),
   events: {
     async signIn({ user, account }) {

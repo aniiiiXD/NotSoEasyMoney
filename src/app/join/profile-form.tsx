@@ -101,7 +101,7 @@ export default function ProfileForm({ initial, logout, demoMode }: { initial: Pr
       <header className={styles.header}>
         <div className={styles.headerTop}>
           <Link href="/" className={styles.wordmark}><span className="brand-mark" aria-hidden="true" />Mystery Match</Link>
-          {initial ? <Link className={styles.headerLink} href="/discover">Back to introductions</Link> : <form action={logout}><button className={styles.signOut} type="submit">Sign out</button></form>}
+          {initial ? <Link className={styles.headerLink} href="/discover">Back to introductions</Link> : <><Link className={styles.headerLink} href="/account">Account & support</Link><form action={logout}><button className={styles.signOut} type="submit">Sign out</button></form></>}
         </div>
       </header>
       <main className={styles.narrow}>

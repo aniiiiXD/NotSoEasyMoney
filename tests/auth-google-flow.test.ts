@@ -54,6 +54,7 @@ test("mock Google OAuth registers only after validation and fails closed on stor
     },
   };
   const callbacks = createAuthCallbacks({
+    async accountVersion() { return "test-version"; },
     async readPendingReferral() {
       referralReads++;
       return "CREATOR";

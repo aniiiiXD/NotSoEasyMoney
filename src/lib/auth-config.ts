@@ -62,10 +62,11 @@ export const authCallbacks = {
 type GoogleRegistrationDependencies = {
   readPendingReferral: () => Promise<string | null>;
   registerGoogleAccount: (userId: string, referralCode: string | null) => Promise<unknown>;
+  accountVersion: (userId: string) => Promise<string | null>;
 };
 
 /** Register the verified Google identity before Auth.js issues its session. */
-export function createAuthCallbacks({ readPendingReferral, registerGoogleAccount }: GoogleRegistrationDependencies) {
+export function createAuthCallbacks({ readPendingReferral, registerGoogleAccount, accountVersion }: GoogleRegistrationDependencies) {
   return {
     ...authCallbacks,
     async jwt(params) {
@@ -75,11 +76,18 @@ export function createAuthCallbacks({ readPendingReferral, registerGoogleAccount
         try {
           const code = await readPendingReferral();
           await registerGoogleAccount(token.userId, code);
+          token.accountVersion = await accountVersion(token.userId);
+          if (!token.accountVersion) throw new Error("Account unavailable");
         } catch {
           // Auth.js may log callback errors; never include database or cookie
           // details, and never issue a session after registration fails.
           throw new Error("Account registration could not be completed.");
         }
+      }
+      if (typeof token.userId === "string" && token.userId.startsWith("google:") && !params.account) {
+        try {
+          if (typeof token.accountVersion !== "string" || token.accountVersion !== await accountVersion(token.userId)) return null;
+        } catch { return null; }
       }
       return token;
     },
