@@ -129,7 +129,7 @@ export default function ChatClient({ initialRooms, selected, logout, demoMode }:
 
   return <main className={`${styles.page} ${selected ? styles.selectedPage : ""}`}>
     <header className={`${appStyles.header} ${styles.globalHeader}`}>
-      <div className={appStyles.headerTop}><Link href="/" className={appStyles.wordmark}>Mystery Match</Link><form action={logout}><button className={appStyles.signOut} type="submit">Sign out</button></form></div>
+      <div className={appStyles.headerTop}><Link href="/" className={appStyles.wordmark}><span className="brand-mark" aria-hidden="true" />Mystery Match</Link><form action={logout}><button className={appStyles.signOut} type="submit">Sign out</button></form></div>
       <nav className={appStyles.appNav} aria-label="Main navigation"><Link href="/discover">Discover</Link><Link href="/chat" aria-current="page">Conversations</Link><Link href="/join?edit=1">Preferences</Link></nav>
     </header>
     <div className={styles.content}>

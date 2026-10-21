@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Mystery Match — meet the mind first",
-  description: "A more thoughtful way to meet, starting with a conversation.",
+  title: "Mystery Match: blind dating, no photos",
+  description: "Answer one questionnaire, get matched by vector similarity, and talk before you ever swap socials. No photos, ever.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

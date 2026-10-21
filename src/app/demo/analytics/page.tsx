@@ -30,7 +30,7 @@ export default async function DemoAnalyticsPage() {
     <main className={styles.page}>
       <header className={styles.header}>
         <div className={styles.headerInner}>
-          <Link href="/" className={styles.wordmark}>Mystery Match</Link>
+          <Link href="/" className={styles.wordmark}><span className="brand-mark" aria-hidden="true" />Mystery Match</Link>
           <Link href="/discover" className={styles.back}>Back to introductions <span aria-hidden="true">↗</span></Link>
         </div>
       </header>

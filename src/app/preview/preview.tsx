@@ -216,7 +216,7 @@ export default function Preview() {
     <div className={styles.page}>
       <header className={styles.header}>
         <div className={styles.headerInner}>
-          <Link href="/" className={styles.wordmark}>Mystery Match</Link>
+          <Link href="/" className={styles.wordmark}><span className="brand-mark" aria-hidden="true" />Mystery Match</Link>
           {screen === "analytics" ? (
             <button type="button" className={styles.headerAction} onClick={() => setScreen(returnScreen)}>Back to demo</button>
           ) : (

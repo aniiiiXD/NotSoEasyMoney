@@ -22,7 +22,7 @@ export default async function AnalyticsPage() {
 
   return (
     <main className={styles.page}>
-      <header className={styles.header}><Link href="/">Mystery Match</Link></header>
+      <header className={styles.header}><Link href="/"><span className="brand-mark" aria-hidden="true" />Mystery Match</Link></header>
       <div className={styles.content}>
         <p className={styles.eyebrow}>Private · Admin only</p>
         <h1 className={styles.title}>Analytics.</h1>
