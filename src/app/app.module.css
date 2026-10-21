@@ -1,0 +1,94 @@
+.page { min-height: 100vh; background: #f8f7f4; color: #242423; padding-bottom: 64px; }
+.header { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+.headerTop { min-height: 68px; display: flex; align-items: center; justify-content: space-between; gap: 14px; border-bottom: 1px solid #e8e6e1; }
+.wordmark { color: #242423; text-decoration: none; font-size: 18px; font-weight: 750; letter-spacing: -.055em; white-space: nowrap; }
+.headerLink, .signOut { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0; border: 0; background: none; color: #62615e; font-size: 13px; font-weight: 600; text-decoration: none; cursor: pointer; white-space: nowrap; }
+.headerLink:hover, .signOut:hover { color: #242423; }
+.appNav { display: flex; align-items: center; gap: 22px; border-bottom: 1px solid #e8e6e1; }
+.appNav a { display: inline-flex; align-items: center; min-height: 50px; color: #716f6a; font-size: 13px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+.appNav a[aria-current="page"] { color: #242423; box-shadow: inset 0 -2px #242423; }
+.narrow { max-width: 600px; margin: 0 auto; padding: 42px 20px 0; }
+.demoNote { margin: 0 0 26px; padding: 14px 16px; border-left: 3px solid #aaa4bc; background: #f0eef5; color: #514b64; font-size: 13px; line-height: 1.6; }
+.demoNote p { margin: 0; }
+.demoNote a { display: inline-block; margin-top: 8px; color: #514b64; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.sampleFill { margin: -4px 0 28px; padding: 16px; border: 1px solid #dedbea; border-radius: 6px; background: #f8f7fb; color: #514b64; font-size: 13px; line-height: 1.55; }
+.sampleFill p { margin: 0; }
+.sampleFill button { display: inline-flex; align-items: center; min-height: 44px; padding: 0; border: 0; background: none; color: #514b64; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.progressHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #706f6b; font-size: 12px; font-weight: 650; }
+.progressTrack { overflow: hidden; height: 3px; margin-top: 12px; background: #e5e3de; }
+.progressTrack span { display: block; height: 100%; background: #827c9d; transition: width 180ms ease; }
+.form { margin-top: 44px; }
+.intro { margin-bottom: 28px; }
+.kicker { margin: 0 0 14px; color: #77736f; font-size: 12px; font-weight: 700; letter-spacing: .03em; }
+.intro h1, .discoveryHeader h1 { margin: 0; color: #242423; font-family: Georgia, "Times New Roman", serif; font-size: clamp(34px, 9vw, 47px); font-weight: 400; letter-spacing: -.045em; line-height: 1.09; overflow-wrap: anywhere; }
+.intro > p:last-child, .discoveryHeader > p:last-child { margin: 16px 0 0; color: #6f706c; font-size: 15px; line-height: 1.65; }
+.fieldGrid { display: grid; gap: 18px; }
+.field { display: grid; gap: 8px; color: #343431; font-size: 13px; font-weight: 650; }
+.field input, .field select { width: 100%; min-width: 0; min-height: 50px; padding: 0 14px; border: 1px solid #dcdbd5; border-radius: 6px; background: #fff; color: #242423; font-size: 16px; font-weight: 400; }
+.field input::placeholder { color: #999791; }
+.fieldset, .question { min-width: 0; padding: 0; border: 0; }
+.fieldset { margin: 26px 0 0; }
+.fieldset legend { margin-bottom: 10px; color: #343431; font-size: 13px; font-weight: 650; }
+.choiceRow { display: flex; flex-wrap: wrap; gap: 8px; }
+.choice, .answer { display: flex; align-items: center; gap: 10px; border: 1px solid #deddd7; border-radius: 6px; background: #fff; color: #474641; cursor: pointer; }
+.choice { min-height: 44px; padding: 10px 13px; font-size: 13px; }
+.choice:has(input:checked), .answer:has(input:checked) { border-color: #9a95b3; background: #f1eff7; color: #393448; }
+.choice input, .answer input, .consent input { flex: none; width: 17px; height: 17px; margin: 0; accent-color: #625b81; }
+.ageRow { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 24px; }
+.question { margin: 0; }
+.answerList { display: grid; gap: 8px; }
+.answer { min-height: 52px; padding: 12px 14px; font-size: 14px; line-height: 1.4; }
+.privacyBlock { padding: 22px 0; border-top: 1px solid #e3e1dc; border-bottom: 1px solid #e3e1dc; color: #565550; font-size: 14px; line-height: 1.6; }
+.privacyBlock p { margin: 0; }
+.privacyBlock a { display: inline-block; margin-top: 12px; color: #625b81; font-weight: 650; text-decoration: underline; text-underline-offset: 3px; }
+.privacyBlock p a { margin: 0; }
+.consent { display: flex; align-items: flex-start; gap: 10px; }
+.consent input { margin-top: 3px; }
+.answerCount { margin: 24px 0 0; font-size: 14px; font-weight: 650; }
+.helper { margin: 8px 0 0; color: #706f6b; font-size: 13px; line-height: 1.6; }
+.error { margin: 24px 0 0; color: #9b413a; font-size: 14px; line-height: 1.5; }
+.error p { margin: 0; }
+.error button { margin-top: 10px; min-height: 44px; padding: 0; border: 0; background: none; color: #625b81; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.submitRow { display: flex; gap: 10px; margin-top: 34px; }
+.primary, .secondary, .backButton { display: inline-flex; align-items: center; justify-content: center; min-height: 50px; padding: 0 20px; border: 1px solid transparent; border-radius: 6px; font-size: 14px; font-weight: 650; text-decoration: none; cursor: pointer; }
+.primary { flex: 1; background: #292927; color: #fff; }
+.primary:hover { background: #41413e; }
+.primary:disabled { opacity: .55; cursor: wait; }
+.backButton, .secondary { border-color: #deddd7; background: transparent; color: #343431; }
+.backButton { min-width: 88px; }
+.backButton:hover, .secondary:hover { background: #efeee9; }
+.discovery { max-width: 1000px; margin: 0 auto; padding: 54px 20px 0; }
+.discoveryHeader h1 { font-size: clamp(36px, 9vw, 54px); }
+.discovery .demoNote { margin: 28px 0 0; }
+.candidateGrid { display: grid; gap: 12px; margin-top: 38px; }
+.candidate { display: flex; flex-direction: column; min-width: 0; min-height: 250px; padding: 24px; border: 1px solid #e3e1dc; border-radius: 8px; background: #fff; }
+.candidateLabel { margin: 0; color: #77736f; font-size: 12px; font-weight: 650; }
+.candidate h2 { margin: 24px 0 8px; font-family: Georgia, "Times New Roman", serif; font-size: 31px; font-weight: 400; letter-spacing: -.035em; overflow-wrap: anywhere; }
+.candidateDescription { margin: 0; color: #777670; font-size: 14px; line-height: 1.55; }
+.candidateActions { display: flex; gap: 8px; margin-top: auto; padding-top: 30px; }
+.candidateActions button { flex: 1; min-height: 48px; padding: 0 16px; border: 1px solid #deddd7; border-radius: 6px; background: transparent; color: #343431; font-size: 14px; font-weight: 650; cursor: pointer; }
+.candidateActions button:last-child { border-color: #292927; background: #292927; color: #fff; }
+.candidateActions button:disabled { opacity: .5; cursor: wait; }
+.empty { margin-top: 40px; padding: 44px 0; border-top: 1px solid #e3e1dc; }
+.emptyMark { position: relative; width: 56px; height: 40px; margin-bottom: 26px; }
+.emptyMark span { position: absolute; top: 0; width: 38px; height: 38px; border: 1px solid #aaa4bc; border-radius: 50%; }
+.emptyMark span:first-child { left: 0; background: #f0eef5; }
+.emptyMark span:last-child { left: 18px; }
+.empty h2 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: 26px; font-weight: 400; letter-spacing: -.025em; }
+.empty p { max-width: 420px; margin: 12px 0 22px; color: #777670; font-size: 14px; line-height: 1.65; }
+.notice { margin: 30px 0 0; padding: 14px 16px; border-left: 3px solid #aaa4bc; background: #f0eef5; color: #514b64; font-size: 14px; line-height: 1.5; }
+.notice a { font-weight: 700; text-underline-offset: 3px; }
+@media (min-width: 680px) {
+  .header { padding: 0 32px; }
+  .headerTop { min-height: 76px; }
+  .wordmark { font-size: 20px; }
+  .narrow { padding: 64px 32px 0; }
+  .form { margin-top: 54px; }
+  .fieldGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fieldGrid > :first-child { grid-column: 1 / -1; }
+  .submitRow { justify-content: flex-end; }
+  .primary { flex: 0 0 auto; min-width: 180px; }
+  .discovery { padding: 78px 32px 0; }
+  .candidateGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (prefers-reduced-motion: reduce) { .progressTrack span { transition: none; } }
