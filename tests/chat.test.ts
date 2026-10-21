@@ -2,7 +2,7 @@ import { after, beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { getDb } from "../src/lib/db.ts";
-import { blockRoom, listRooms, readRoom, sendMessage } from "../src/lib/chat.ts";
+import { blockRoom, listRooms, readRoom, reportRoom, sendMessage } from "../src/lib/chat.ts";
 import { sampleId } from "../src/lib/demo.ts";
 
 // These tests reset tables. Fail before opening a connection unless the caller
@@ -85,6 +85,18 @@ test("blocking a room requires membership and closes it for both members", async
   assert.equal(await readRoom("local:bob", "room-1"), null);
   const { rows } = await db.query("SELECT blocker_id, blocked_id FROM blocks");
   assert.deepEqual(rows, [{ blocker_id: "local:alice", blocked_id: "local:bob" }]);
+});
+
+test("only a room member can report and reporting atomically blocks and closes the room", async () => {
+  assert.equal(await reportRoom("local:eve", "room-1", "scam"), "not_found");
+  assert.equal(await reportRoom("local:alice", "room-1", "invalid"), "invalid");
+  assert.equal(await reportRoom("local:alice", "room-1", "scam"), "reported");
+  assert.equal(await readRoom("local:alice", "room-1"), null);
+  assert.equal(await readRoom("local:bob", "room-1"), null);
+  assert.deepEqual(await sendMessage("local:bob", "room-1", "after report"), { ok: false, reason: "not_found" });
+  const reports = await db.query("SELECT reporter_id, reported_id, reason, status FROM safety_reports");
+  assert.deepEqual(reports.rows, [{ reporter_id: "local:alice", reported_id: "local:bob", reason: "scam", status: "open" }]);
+  assert.deepEqual((await db.query("SELECT blocker_id, blocked_id FROM blocks")).rows, [{ blocker_id: "local:alice", blocked_id: "local:bob" }]);
 });
 
 test("deactivated rooms or profiles deny access", async () => {

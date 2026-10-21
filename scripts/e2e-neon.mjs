@@ -89,6 +89,13 @@ try {
   assert.equal(sent.message.body, "Hello from the integration test");
   const room = await json(`/api/rooms/${match.roomId}/messages`, bob);
   assert.equal(room.messages.at(-1).body, "Hello from the integration test");
+  const deniedReport = await request(`/api/rooms/${match.roomId}/report`, { method: "POST", headers: { origin, "content-type": "application/json" }, body: JSON.stringify({ reason: "scam" }) });
+  assert.equal(deniedReport.status, 401);
+  const report = await request(`/api/rooms/${match.roomId}/report`, { method: "POST", headers: { cookie: alice, origin, "content-type": "application/json" }, body: JSON.stringify({ reason: "scam" }) });
+  assert.equal(report.status, 204);
+  assert.equal((await request(`/api/rooms/${match.roomId}/messages`, { headers: { cookie: bob } })).status, 404);
+  const queued = await db.query("SELECT reason, status FROM safety_reports WHERE room_id = $1", [match.roomId]);
+  assert.deepEqual(queued.rows, [{ reason: "scam", status: "open" }]);
   assert.equal((await json("/api/analytics/consent", alice)).enabled, true);
   assert.equal((await json("/api/analytics/consent", alice, "PUT", { enabled: false })).enabled, false);
   const attribution = (await db.query("SELECT code, profile_completed_at FROM referral_attributions WHERE user_id = $1", [users[0]])).rows[0];
@@ -99,7 +106,7 @@ try {
   assert.ok(listing.stdout.includes(code));
   const complete = await request("/signup/complete", { headers: { cookie } });
   assert.ok(complete.headers.getSetCookie().some((value) => value.includes("Max-Age=0")));
-  console.log("PASS simulated Google account registration, referral attribution, profiles, mutual matching, chat, and analytics consent");
+  console.log("PASS simulated Google account registration, referral attribution, profiles, mutual matching, chat, report and block, and analytics consent");
 } finally {
   if (verifiedTestDatabase) {
     await db.query("DELETE FROM profiles WHERE user_id = ANY($1::text[])", [users]);

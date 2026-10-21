@@ -21,6 +21,9 @@ export default function ChatClient({ initialRooms, selected, logout, demoMode }:
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [blocking, setBlocking] = useState(false);
+  const [reporting, setReporting] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState("");
   const [unavailable, setUnavailable] = useState(false);
   const [error, setError] = useState("");
   const messageList = useRef<HTMLDivElement>(null);
@@ -127,6 +130,21 @@ export default function ChatClient({ initialRooms, selected, logout, demoMode }:
     finally { setBlocking(false); }
   }
 
+  async function report(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedId || !reportReason || reporting) return;
+    setReporting(true); setError("");
+    try {
+      const response = await fetch(`/api/rooms/${encodeURIComponent(selectedId)}/report`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason: reportReason }),
+      });
+      if (!response.ok) { setError("Couldn’t submit your report. Please try again."); return; }
+      router.push("/chat?reported=1");
+      router.refresh();
+    } catch { setError("Couldn’t connect. Please try again."); }
+    finally { setReporting(false); }
+  }
+
   return <main className={`${styles.page} ${selected ? styles.selectedPage : ""}`}>
     <header className={`${appStyles.header} ${styles.globalHeader}`}>
       <div className={appStyles.headerTop}><Link href="/" className={appStyles.wordmark}><span className="brand-mark" aria-hidden="true" />Mystery Match</Link><form action={logout}><button className={appStyles.signOut} type="submit">Sign out</button></form></div>
@@ -153,8 +171,23 @@ export default function ChatClient({ initialRooms, selected, logout, demoMode }:
               <Link href="/chat" className={styles.back} aria-label="Back to conversations">←</Link>
               <span className={styles.avatar} aria-hidden="true">{selected.alias.slice(0, 1).toUpperCase()}</span>
               <div className={styles.person}><h1>{selected.alias}</h1><small>{demoMode ? "Sample chat · scripted replies" : "Get to know each other"}</small></div>
+              {!demoMode && <button type="button" className={styles.block} onClick={() => setReportOpen((open) => !open)} disabled={unavailable}>Report</button>}
               <button type="button" className={styles.block} onClick={block} disabled={blocking || unavailable}>Block</button>
             </div>
+            {reportOpen && !unavailable && <form onSubmit={report} className={styles.reportForm}>
+              <label htmlFor="report-reason">Why are you reporting this person?</label>
+              <select id="report-reason" value={reportReason} onChange={(event) => setReportReason(event.target.value)} required>
+                <option value="">Choose a reason</option>
+                <option value="harassment">Harassment or threatening behavior</option>
+                <option value="sexual_content">Unwanted sexual content</option>
+                <option value="scam">Scam or impersonation</option>
+                <option value="underage">May be under 18</option>
+                <option value="other">Something else</option>
+              </select>
+              <p>Submitting blocks this person and closes the conversation for both of you.</p>
+              <button type="submit" disabled={!reportReason || reporting}>{reporting ? "Submitting…" : "Report and block"}</button>
+              <button type="button" onClick={() => setReportOpen(false)}>Cancel</button>
+            </form>}
             <div ref={messageList} className={styles.messageList} role="log" aria-live="polite" aria-label="Messages" onScroll={(event) => {
               const panel = event.currentTarget;
               keepAtBottom.current = panel.scrollHeight - panel.scrollTop - panel.clientHeight < 96;

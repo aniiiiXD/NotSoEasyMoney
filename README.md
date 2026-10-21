@@ -56,6 +56,10 @@ The create command prints an invitation link at `/r/CREATOR1` and a QR image at 
 
 Referral attribution is stored separately from opt-in usage analytics and associates the account ID with a code. The operator CLI shows exact counts without the analytics dashboard's small-group suppression; there is no influencer-facing reporting portal. Share these counts and protect database access accordingly.
 
+## Safety reports
+
+Members can report and block the other person from an open conversation. Reporting closes the room for both people and records the selected reason for an operator to review. On a trusted operator machine with database access, run `npm run safety-reports -- list` to list up to 100 open reports and `npm run safety-reports -- reviewed REPORT_ID` after review. The queue contains sensitive member and room identifiers; restrict its access and handle it privately. There are no automatic alerts or staffed moderation built into this prototype: the operator must monitor the queue and define a response process.
+
 ## Matching and analytics
 
 The six-question questionnaire encodes stated preferences into a versioned numeric vector. Introductions require mutually compatible age and gender preferences, at least three shared answers, and no block or pass. Similarity ranks eligible introductions; it is not a clinical assessment or a prediction of relationship success.

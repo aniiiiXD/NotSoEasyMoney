@@ -4,7 +4,7 @@ import { getDb } from "@/lib/db";
 import { listRooms } from "@/lib/chat";
 import ChatClient from "./chat-client";
 
-export default async function ChatPage() {
+export default async function ChatPage({ searchParams }: { searchParams: Promise<{ reported?: string }> }) {
   if (!authConfigured) redirect("/sign-in");
   const session = await auth();
   if (!session?.user?.id) redirect("/sign-in");
@@ -12,5 +12,6 @@ export default async function ChatPage() {
   if (!profile?.active) redirect("/join");
   async function logout() { "use server"; await signOut({ redirectTo: "/" }); }
   const demoMode = process.env.NODE_ENV === "development" && session.user.id.startsWith("demo:");
-  return <ChatClient key="inbox" initialRooms={await listRooms(session.user.id)} selected={null} logout={logout} demoMode={demoMode} />;
+  const { reported } = await searchParams;
+  return <>{reported === "1" && <p role="status" style={{ padding: "12px 20px", margin: 0 }}>Your report was submitted and the conversation is closed.</p>}<ChatClient key="inbox" initialRooms={await listRooms(session.user.id)} selected={null} logout={logout} demoMode={demoMode} /></>;
 }

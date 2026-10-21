@@ -15,3 +15,24 @@ export function isSameOrigin(request: Request): boolean {
     return false;
   }
 }
+
+export class RequestBodyTooLarge extends Error {}
+
+/** Read JSON with a byte limit, even when Content-Length is missing or false. */
+export async function readJsonWithLimit(request: Request, limit: number): Promise<unknown> {
+  if (!request.body) throw new SyntaxError("Missing body");
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > limit) { await reader.cancel(); throw new RequestBodyTooLarge(); }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+  return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+}

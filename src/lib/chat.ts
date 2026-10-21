@@ -165,3 +165,23 @@ export async function blockRoom(userId: string, roomId: string): Promise<boolean
     return true;
   });
 }
+
+export const REPORT_REASONS = ["harassment", "sexual_content", "scam", "underage", "other"] as const;
+export type ReportReason = typeof REPORT_REASONS[number];
+
+/** Report a conversation and block its other member in the same transaction. */
+export async function reportRoom(userId: string, roomId: string, reason: unknown): Promise<"reported" | "invalid" | "not_found"> {
+  if (typeof reason !== "string" || !REPORT_REASONS.includes(reason as ReportReason)) return "invalid";
+  return withTransaction(getDb(), async (client) => {
+    const room = await lockAllowedRoom(client, userId, roomId);
+    if (!room) return "not_found";
+    if (isSampleForViewer(userId, room.other_id)) return "not_found";
+    await client.query(
+      "INSERT INTO safety_reports (id, reporter_id, reported_id, room_id, reason) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (reporter_id, room_id) DO NOTHING",
+      [randomUUID(), userId, room.other_id, roomId, reason],
+    );
+    await client.query("INSERT INTO blocks (blocker_id, blocked_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", [userId, room.other_id]);
+    await client.query("UPDATE rooms SET active = 0 WHERE id = $1", [roomId]);
+    return "reported";
+  });
+}

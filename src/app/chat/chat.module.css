@@ -80,3 +80,7 @@
   .composer { padding: 0 28px 24px; }
 }
 @media (min-width: 760px) and (hover: hover) and (pointer: fine) { .composerHint span { display: inline; } }
+.reportForm { display: flex; flex-wrap: wrap; gap: 10px; padding: 16px; border-bottom: 1px solid #e3e1dc; font-size: 14px; }
+.reportForm label, .reportForm p { flex-basis: 100%; margin: 0; }
+.reportForm select { min-height: 44px; max-width: 100%; padding: 8px; }
+.reportForm button { min-height: 44px; padding: 8px 14px; cursor: pointer; }

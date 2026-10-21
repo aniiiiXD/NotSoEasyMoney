@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { getDb } from "@/lib/db";
 import { getOwnProfile, saveProfile } from "@/lib/local-matching";
-import { isSameOrigin } from "@/lib/request";
+import { isSameOrigin, readJsonWithLimit, RequestBodyTooLarge } from "@/lib/request";
 
 export const runtime = "nodejs";
 
@@ -18,9 +18,10 @@ export async function POST(request: Request) {
   if (!request.headers.get("content-type")?.includes("application/json")) return Response.json({ error: "Expected JSON." }, { status: 415 });
   if (Number(request.headers.get("content-length") || 0) > 16384) return Response.json({ error: "Profile is too large." }, { status: 413 });
   try {
-    const result = await saveProfile(getDb(), userId, await request.json());
+    const result = await saveProfile(getDb(), userId, await readJsonWithLimit(request, 16384));
     return Response.json(result);
   } catch (error) {
+    if (error instanceof RequestBodyTooLarge) return Response.json({ error: "Profile is too large." }, { status: 413 });
     if (error instanceof TypeError || error instanceof SyntaxError) return Response.json({ error: error.message }, { status: 400 });
     return Response.json({ error: "Could not save your profile. Please try again." }, { status: 500 });
   }

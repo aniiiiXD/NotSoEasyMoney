@@ -11,7 +11,8 @@
     "test": "node --test --test-concurrency=1 tests/*.test.ts",
     "typecheck": "tsc --noEmit",
     "db:migrate": "node --env-file-if-exists=.env.local scripts/migrate.mjs",
-    "referrals": "node --env-file-if-exists=.env.local scripts/referrals.mjs"
+    "referrals": "node --env-file-if-exists=.env.local scripts/referrals.mjs",
+    "safety-reports": "node --env-file-if-exists=.env.local scripts/safety-reports.mjs"
   },
   "dependencies": {
     "@vercel/functions": "^3.10.2",

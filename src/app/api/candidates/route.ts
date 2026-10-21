@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { getDb } from "@/lib/db";
 import { decideCandidate, listCandidates } from "@/lib/local-matching";
-import { isSameOrigin } from "@/lib/request";
+import { isSameOrigin, readJsonWithLimit, RequestBodyTooLarge } from "@/lib/request";
 
 export const runtime = "nodejs";
 
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
   if (!request.headers.get("content-type")?.includes("application/json")) return Response.json({ error: "Expected JSON." }, { status: 415 });
   if (Number(request.headers.get("content-length") || 0) > 2048) return Response.json({ error: "Request is too large." }, { status: 413 });
   try {
-    const body: unknown = await request.json();
+    const body: unknown = await readJsonWithLimit(request, 2048);
     if (!body || typeof body !== "object" || Array.isArray(body)) return Response.json({ error: "Invalid request." }, { status: 400 });
     const { candidateId, decision } = body as Record<string, unknown>;
     if (typeof candidateId !== "string" || candidateId.length > 100 || (decision !== "like" && decision !== "pass")) return Response.json({ error: "Invalid decision." }, { status: 400 });
@@ -30,7 +30,9 @@ export async function POST(request: Request) {
       matchedRoomId = roomId;
     });
     return status === "unavailable" ? Response.json({ error: "This introduction is no longer available." }, { status: 404 }) : Response.json({ status, ...(matchedRoomId ? { roomId: matchedRoomId } : {}) });
-  } catch {
+  } catch (error) {
+    if (error instanceof RequestBodyTooLarge) return Response.json({ error: "Request is too large." }, { status: 413 });
+    if (error instanceof SyntaxError || error instanceof TypeError) return Response.json({ error: "Invalid request." }, { status: 400 });
     return Response.json({ error: "Could not save your choice. Please try again." }, { status: 500 });
   }
 }
