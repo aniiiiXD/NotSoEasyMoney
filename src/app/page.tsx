@@ -1,18 +1,54 @@
 import Link from "next/link";
+import { SAMPLE_PROFILES } from "@/lib/demo";
+import { normalizeAnswers, QUESTION_IDS, type PersonalityAnswers, type PersonalityQuestionId } from "@/lib/personality";
+
+// Short axis labels for the illustrative vector card; full prompts live in the questionnaire.
+const AXES: Record<PersonalityQuestionId, { label: string; low: string; high: string }> = {
+  social_setting: { label: "Setting", low: "One-on-one", high: "Groups" },
+  planning_style: { label: "Plans", low: "Ahead", high: "In the moment" },
+  novelty: { label: "Activities", low: "Familiar", high: "New" },
+  conversation_style: { label: "Conversation", low: "Light", high: "In-depth" },
+  message_frequency: { label: "Messaging", low: "Weekly", high: "All day" },
+  date_atmosphere: { label: "Atmosphere", low: "Quiet", high: "Lively" },
+};
+
+// The same sample answers the hosted demo uses, compared with a fictional profile.
+const exampleAnswers: PersonalityAnswers = {
+  social_setting: 2,
+  planning_style: 3,
+  novelty: 4,
+  conversation_style: 3,
+  message_frequency: 3,
+  date_atmosphere: 2,
+};
+
+function exampleComparison() {
+  const sample = SAMPLE_PROFILES[0];
+  const you = normalizeAnswers(exampleAnswers);
+  const them = normalizeAnswers(sample.answers);
+  const rows = QUESTION_IDS.map((id) => ({ id, you: you[id] ?? 0, them: them[id] ?? 0 }));
+  const difference = rows.reduce((total, row) => total + Math.abs(row.you - row.them), 0);
+  return { alias: sample.alias.replace(" (sample)", ""), rows, similarity: Math.round((1 - difference / rows.length) * 100) };
+}
 
 export default function Home() {
   const demoAvailable = process.env.NODE_ENV === "development" && Boolean(process.env.AUTH_SECRET);
   const hostedPreview = Boolean(process.env.VERCEL);
   const startHref = hostedPreview ? "/preview" : "/join";
   const startLabel = hostedPreview ? "Try the demo" : "Get started";
+  const heroHref = hostedPreview ? "/preview" : demoAvailable ? "/sign-in" : "/join";
+  const heroLabel = hostedPreview || demoAvailable ? "Try the demo" : "Take the questionnaire";
+  const comparison = exampleComparison();
+
   return (
     <div className="landing" id="top">
       <header className="landing-header">
         <div className="landing-width header-content">
-          <Link className="wordmark" href="/">Mystery Match</Link>
+          <Link className="wordmark" href="/"><span className="brand-mark" aria-hidden="true" />Mystery Match</Link>
           <nav className="desktop-nav" aria-label="Main navigation">
             <a href="#how-it-works">How it works</a>
-            <a href="#our-approach">Our approach</a>
+            <a href="#the-method">The method</a>
+            <a href="#your-call">Socials, later</a>
           </nav>
           <div className="header-links">
             <Link className="header-sign-in" href="/sign-in">Sign in</Link>
@@ -22,65 +58,134 @@ export default function Home() {
       </header>
 
       <main>
-        <section className="landing-width hero" aria-labelledby="hero-title">
-          <div className="hero-content">
-            <p className="section-label">A different way to date</p>
-            <h1 id="hero-title">Get to know someone before you see them.</h1>
-            <p className="hero-description">A good connection is more than a first impression. Start with personality and conversation. Photos can wait.</p>
-            <div className="hero-actions">
-              <Link className="landing-button" href={hostedPreview ? "/preview" : demoAvailable ? "/sign-in" : "/join"}>{hostedPreview || demoAvailable ? "Try the demo" : "Get started"}</Link>
-              <a className="landing-text-link" href="#how-it-works">See how it works <span aria-hidden="true">↓</span></a>
+        <section className="hero-band" aria-labelledby="hero-title">
+          <div className="landing-width hero">
+            <div className="hero-content">
+              <p className="section-label">Blind dating, by method</p>
+              <h1 id="hero-title">No photos. <em>Just the person.</em></h1>
+              <p className="hero-description">Everyone answers the same questionnaire and sets their dating preferences. We turn your answers into a vector and use similarity search to find the people closest to you. You talk here, and only swap socials if you both want to.</p>
+              <div className="hero-actions">
+                <Link className="landing-button" href={heroHref}>{heroLabel}</Link>
+                <a className="landing-text-link" href="#how-it-works">See how matching works <span aria-hidden="true">↓</span></a>
+              </div>
+              {(demoAvailable || hostedPreview) && <p className="demo-hint">The demo uses fictional profiles and scripted replies.</p>}
             </div>
-            {(demoAvailable || hostedPreview) && <p className="demo-hint">Explore with fictional profiles and conversations.</p>}
+
+            <figure className="vector-card" aria-labelledby="vector-caption">
+              <div className="vector-card-top">
+                <span id="vector-caption">Two profiles, as vectors</span>
+                <span className="vector-tag">Example</span>
+              </div>
+              <div className="vector-legend" aria-hidden="true">
+                <span><i className="dot dot-you" />You</span>
+                <span><i className="dot dot-them" />{comparison.alias}</span>
+              </div>
+              <ul className="vector-rows">
+                {comparison.rows.map((row) => (
+                  <li key={row.id}>
+                    <div className="vector-row-label"><span>{AXES[row.id].label}</span><span className="vector-range">{AXES[row.id].low} to {AXES[row.id].high}</span></div>
+                    <div className="vector-track" aria-hidden="true">
+                      <i className="dot dot-them" style={{ left: `${row.them * 100}%` }} />
+                      <i className="dot dot-you" style={{ left: `${row.you * 100}%` }} />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <div className="vector-result">
+                <span>Similarity</span>
+                <strong>{comparison.similarity}%</strong>
+              </div>
+              <p className="vector-footnote">No photo, name, or face anywhere in the comparison.</p>
+            </figure>
           </div>
-          <figure className="conversation-prompt">
-            <figcaption>A question to start with</figcaption>
-            <blockquote>What could you talk about for hours?</blockquote>
-            <p>Good conversations begin somewhere.</p>
-          </figure>
+        </section>
+
+        <section className="promise-strip" aria-label="Our promises">
+          <ul className="landing-width promises">
+            <li><strong>0</strong><span>photos, ever. We never ask for one.</span></li>
+            <li><strong>6</strong><span>questions every member answers</span></li>
+            <li><strong>2</strong><span>yeses before any conversation opens</span></li>
+            <li><strong>You</strong><span>decide if socials are exchanged</span></li>
+          </ul>
         </section>
 
         <section className="how-section" id="how-it-works" aria-labelledby="how-title">
           <div className="landing-width">
             <div className="section-heading">
               <p className="section-label">How it works</p>
-              <h2 id="how-title">Start with who you are.</h2>
-              <p>A little curiosity can go a long way. Here&apos;s where to begin.</p>
+              <h2 id="how-title">From answers to a first hello.</h2>
+              <p>Four steps. None of them involve a picture.</p>
             </div>
             <ol className="steps">
               <li>
                 <span className="step-number">01</span>
-                <div>
-                  <h3>Tell us about yourself</h3>
-                  <p>Answer a few questions about who you are and what you&apos;re looking for.</p>
-                </div>
+                <h3>Fill in the questionnaire</h3>
+                <p>Everyone answers the same questions about how they like to connect, plus their dating preferences: who you&apos;d like to meet and the age range you&apos;re open to.</p>
               </li>
               <li>
                 <span className="step-number">02</span>
-                <div>
-                  <h3>Find someone to connect with</h3>
-                  <p>Your answers and preferences help guide who we suggest.</p>
-                </div>
+                <h3>Become a vector</h3>
+                <p>Each answer is placed on a scale from 0 to 1. Together they form your profile vector, a private set of numbers that is never shown to anyone.</p>
               </li>
               <li>
                 <span className="step-number">03</span>
-                <div>
-                  <h3>Start a conversation</h3>
-                  <p>Get to know each other without a photo making the first impression.</p>
-                </div>
+                <h3>Similarity search</h3>
+                <p>Among people whose preferences fit yours, and yours theirs, we rank who is closest to you. You see them under a nickname, never a face.</p>
+              </li>
+              <li>
+                <span className="step-number">04</span>
+                <h3>Talk, then decide</h3>
+                <p>When you both say hello, a private chat opens here. If it clicks, you can choose to swap socials. If not, no one ever saw your photo.</p>
               </li>
             </ol>
           </div>
         </section>
 
-        <section className="landing-width approach-section" id="our-approach" aria-labelledby="approach-title">
-          <div className="approach-heading">
-            <p className="section-label">Our approach</p>
-            <h2 id="approach-title">There&apos;s more to a person than a picture.</h2>
+        <section className="method-section" id="the-method" aria-labelledby="method-title">
+          <div className="landing-width method-grid">
+            <div className="method-heading">
+              <p className="section-label">The method</p>
+              <h2 id="method-title">Matching you can actually explain.</h2>
+              <p>No black box and no swiping on looks. Here is exactly what happens to your answers.</p>
+            </div>
+            <dl className="method-list">
+              <div>
+                <dt>Preferences come first</dt>
+                <dd>You&apos;re only introduced when both people fall within each other&apos;s gender and age preferences. This is a hard rule, not a weight.</dd>
+              </div>
+              <div>
+                <dt>Answers become numbers</dt>
+                <dd>Each answer on the five-point scale becomes a value between 0 and 1. A skipped question is left out, never guessed.</dd>
+              </div>
+              <div>
+                <dt>Closest first</dt>
+                <dd>We compare vectors question by question, using only questions you both answered, and at least three of them. The smallest average difference ranks highest.</dd>
+              </div>
+              <div>
+                <dt>Honest about limits</dt>
+                <dd>Similarity decides who you meet first. It can&apos;t predict chemistry. That part is up to the conversation.</dd>
+              </div>
+            </dl>
           </div>
-          <div className="approach-copy">
-            <p>What makes you laugh. The things you care about. How you spend a quiet Sunday. That&apos;s the good stuff, and it deserves to come first.</p>
-            <Link className="landing-text-link" href={startHref}>{startLabel} <span aria-hidden="true">→</span></Link>
+        </section>
+
+        <section className="reveal-section" id="your-call" aria-labelledby="reveal-title">
+          <div className="landing-width reveal-grid">
+            <div className="reveal-copy">
+              <p className="section-label">Socials, later</p>
+              <h2 id="reveal-title">Share your socials only if you both want to.</h2>
+              <p>Every conversation starts anonymous. When it feels right, either of you can offer to swap socials. They&apos;re only revealed if both of you agree. Until then, you&apos;re just two nicknames talking.</p>
+            </div>
+            <div className="chat-mock" aria-hidden="true">
+              <div className="chat-mock-top"><span className="avatar-blank">S</span><div><strong>Sage</strong><span>Matched by similarity</span></div></div>
+              <p className="bubble bubble-them">Okay, a bookshop then a long dinner. That&apos;s my perfect Sunday too.</p>
+              <p className="bubble bubble-you">Honestly, this is the best conversation I&apos;ve had on a dating app.</p>
+              <div className="swap-card">
+                <span className="swap-icon">@</span>
+                <div><strong>Swap socials?</strong><span>Shared only if you both say yes</span></div>
+                <div className="swap-status"><span className="swap-yes">You ✓</span><span>Sage …</span></div>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -88,9 +193,9 @@ export default function Home() {
           <div className="landing-width closing-content">
             <div>
               <p className="section-label">When you&apos;re ready</p>
-              <h2 id="closing-title">Let&apos;s start with hello.</h2>
+              <h2 id="closing-title">Let someone get to know you first.</h2>
             </div>
-            <Link className="landing-button" href={startHref}>{startLabel}</Link>
+            <Link className="landing-button landing-button-light" href={startHref}>{startLabel}</Link>
           </div>
         </section>
       </main>
@@ -98,12 +203,12 @@ export default function Home() {
       <footer className="landing-footer">
         <div className="landing-width footer-content">
           <div>
-            <Link className="wordmark" href="/">Mystery Match</Link>
-            <p>A little more getting to know you.</p>
+            <Link className="wordmark" href="/"><span className="brand-mark" aria-hidden="true" />Mystery Match</Link>
+            <p>Blind dating by questionnaire. No photos, ever.</p>
           </div>
           <nav aria-label="Footer navigation">
             <a href="#how-it-works">How it works</a>
-            <a href="#our-approach">Our approach</a>
+            <a href="#the-method">The method</a>
             <Link href="/sign-in">Sign in</Link>
           </nav>
         </div>

@@ -55,7 +55,7 @@ export default async function SignInPage({ searchParams }: {
   return (
     <main className={styles.page}>
       <header className={styles.top}>
-        <Link href="/" className={styles.brand}>Mystery Match</Link>
+        <Link href="/" className={styles.brand}><span className="brand-mark" aria-hidden="true" />Mystery Match</Link>
         <Link href="/" className={styles.home}>Back home <span aria-hidden="true">→</span></Link>
       </header>
       <section className={styles.card}>

@@ -13,7 +13,7 @@ export default async function AnalyticsConsentPage() {
   const enabled = userId ? getAnalyticsConsent(userId) : null;
   return (
     <main className={styles.page}>
-      <header className={styles.header}><Link href="/">Mystery Match</Link></header>
+      <header className={styles.header}><Link href="/"><span className="brand-mark" aria-hidden="true" />Mystery Match</Link></header>
       <div className={`${styles.content} ${styles.narrow}`}>
         <p className={styles.eyebrow}>Your privacy</p>
         <h1 className={styles.title}>Analytics, on your terms.</h1>

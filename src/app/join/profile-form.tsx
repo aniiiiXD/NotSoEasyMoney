@@ -100,7 +100,7 @@ export default function ProfileForm({ initial, logout, demoMode }: { initial: Pr
     <div className={styles.page}>
       <header className={styles.header}>
         <div className={styles.headerTop}>
-          <Link href="/" className={styles.wordmark}>Mystery Match</Link>
+          <Link href="/" className={styles.wordmark}><span className="brand-mark" aria-hidden="true" />Mystery Match</Link>
           {initial ? <Link className={styles.headerLink} href="/discover">Back to introductions</Link> : <form action={logout}><button className={styles.signOut} type="submit">Sign out</button></form>}
         </div>
       </header>
