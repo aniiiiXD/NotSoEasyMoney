@@ -1,34 +1,28 @@
 import Link from "next/link";
-import { SAMPLE_PROFILES } from "@/lib/demo";
-import { normalizeAnswers, QUESTION_IDS, type PersonalityAnswers, type PersonalityQuestionId } from "@/lib/personality";
+import { SAMPLE_PROFILES, SAMPLE_VIEWER_ANSWERS } from "@/lib/demo";
+import { normalizeAnswers, QUESTION_IDS, QUESTIONS, type PersonalityQuestionId } from "@/lib/personality";
 
-// Short axis labels for the illustrative vector card; full prompts live in the questionnaire.
-const AXES: Record<PersonalityQuestionId, { label: string; low: string; high: string }> = {
-  social_setting: { label: "Setting", low: "One-on-one", high: "Groups" },
-  planning_style: { label: "Plans", low: "Ahead", high: "In the moment" },
-  novelty: { label: "Activities", low: "Familiar", high: "New" },
-  conversation_style: { label: "Conversation", low: "Light", high: "In-depth" },
-  message_frequency: { label: "Messaging", low: "Weekly", high: "All day" },
-  date_atmosphere: { label: "Atmosphere", low: "Quiet", high: "Lively" },
-};
+// A few of the twenty questions, with short labels for the illustrative vector card.
+const SHOWN: { id: PersonalityQuestionId; label: string }[] = [
+  { id: "life_of_party", label: "Life of the party" },
+  { id: "feel_emotions", label: "Feels others' emotions" },
+  { id: "like_order", label: "Likes order" },
+  { id: "upset_easily", label: "Gets upset easily" },
+  { id: "vivid_imagination", label: "Vivid imagination" },
+  { id: "horror_movies", label: "Likes horror movies" },
+];
 
-// The same sample answers the hosted demo uses, compared with a fictional profile.
-const exampleAnswers: PersonalityAnswers = {
-  social_setting: 2,
-  planning_style: 3,
-  novelty: 4,
-  conversation_style: 3,
-  message_frequency: 3,
-  date_atmosphere: 2,
-};
-
+// The demo's sample answers compared with a fictional profile, using every question.
 function exampleComparison() {
   const sample = SAMPLE_PROFILES[0];
-  const you = normalizeAnswers(exampleAnswers);
+  const you = normalizeAnswers(SAMPLE_VIEWER_ANSWERS);
   const them = normalizeAnswers(sample.answers);
-  const rows = QUESTION_IDS.map((id) => ({ id, you: you[id] ?? 0, them: them[id] ?? 0 }));
-  const difference = rows.reduce((total, row) => total + Math.abs(row.you - row.them), 0);
-  return { alias: sample.alias.replace(" (sample)", ""), rows, similarity: Math.round((1 - difference / rows.length) * 100) };
+  const difference = QUESTION_IDS.reduce((total, id) => total + Math.abs((you[id] ?? 0) - (them[id] ?? 0)), 0);
+  return {
+    alias: sample.alias.replace(" (sample)", ""),
+    rows: SHOWN.map(({ id, label }) => ({ id, label, you: you[id] ?? 0, them: them[id] ?? 0 })),
+    similarity: Math.round((1 - difference / QUESTION_IDS.length) * 100),
+  };
 }
 
 export default function Home() {
@@ -83,7 +77,7 @@ export default function Home() {
               <ul className="vector-rows">
                 {comparison.rows.map((row) => (
                   <li key={row.id}>
-                    <div className="vector-row-label"><span>{AXES[row.id].label}</span><span className="vector-range">{AXES[row.id].low} to {AXES[row.id].high}</span></div>
+                    <div className="vector-row-label"><span>{row.label}</span><span className="vector-range">Not me to Very me</span></div>
                     <div className="vector-track" aria-hidden="true">
                       <i className="dot dot-them" style={{ left: `${row.them * 100}%` }} />
                       <i className="dot dot-you" style={{ left: `${row.you * 100}%` }} />
@@ -95,7 +89,7 @@ export default function Home() {
                 <span>Similarity</span>
                 <strong>{comparison.similarity}%</strong>
               </div>
-              <p className="vector-footnote">No photo, name, or face anywhere in the comparison.</p>
+              <p className="vector-footnote">Showing 6 of {QUESTIONS.length} questions. No photo, name, or face anywhere in the comparison.</p>
             </figure>
           </div>
         </section>
@@ -103,7 +97,7 @@ export default function Home() {
         <section className="promise-strip" aria-label="Our promises">
           <ul className="landing-width promises">
             <li><strong>0</strong><span>photos, ever. We never ask for one.</span></li>
-            <li><strong>6</strong><span>questions every member answers</span></li>
+            <li><strong>{QUESTIONS.length}</strong><span>research-based questions every member answers</span></li>
             <li><strong>2</strong><span>yeses before any conversation opens</span></li>
             <li><strong>You</strong><span>decide if socials are exchanged</span></li>
           </ul>
@@ -120,7 +114,7 @@ export default function Home() {
               <li>
                 <span className="step-number">01</span>
                 <h3>Fill in the questionnaire</h3>
-                <p>Everyone answers the same questions about how they like to connect, plus their dating preferences: who you&apos;d like to meet and the age range you&apos;re open to.</p>
+                <p>Everyone answers the same 20 questions, drawn from a published personality scale and dating research, plus their dating preferences: who you&apos;d like to meet and the age range you&apos;re open to.</p>
               </li>
               <li>
                 <span className="step-number">02</span>
@@ -149,6 +143,10 @@ export default function Home() {
               <p>No black box and no swiping on looks. Here is exactly what happens to your answers.</p>
             </div>
             <dl className="method-list">
+              <div>
+                <dt>Questions from research</dt>
+                <dd>Seventeen questions come from the Mini-IPIP, a short, public-domain measure of the Big Five personality traits used widely in psychology. Three come from OkCupid&apos;s analysis of the questions long-term couples most often agreed on.</dd>
+              </div>
               <div>
                 <dt>Preferences come first</dt>
                 <dd>You&apos;re only introduced when both people fall within each other&apos;s gender and age preferences. This is a hard rule, not a weight.</dd>

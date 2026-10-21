@@ -9,16 +9,16 @@ import {
   type CandidateInput,
   type MatchingProfile,
 } from "../src/lib/matching.ts";
-import { QUESTIONNAIRE_VERSION, type PersonalityVector } from "../src/lib/personality.ts";
+import { QUESTION_IDS, QUESTIONNAIRE_VERSION, type PersonalityVector } from "../src/lib/personality.ts";
 
-const baseVector: PersonalityVector = {
-  social_setting: 0,
-  planning_style: 0.25,
-  novelty: 0.5,
-  conversation_style: 0.75,
-  message_frequency: 1,
-  date_atmosphere: 0.5,
-};
+const baseVector = Object.fromEntries(
+  QUESTION_IDS.map((id, index) => [id, (index % 5) / 4]),
+) as PersonalityVector;
+
+/** Keep only the first `count` answers, skipping the rest. */
+function firstAnswers(count: number): PersonalityVector {
+  return Object.fromEntries(QUESTION_IDS.map((id, index) => [id, index < count ? baseVector[id] : null])) as PersonalityVector;
+}
 
 function profile(userId: string, overrides: Partial<MatchingProfile> = {}): MatchingProfile {
   return {
@@ -95,26 +95,26 @@ test("a block, pass, or unmatch in either direction excludes the pair", () => {
 });
 
 test("only equal supported questionnaire versions with three shared answers can rank", () => {
-  const a = profile("a", { vector: { ...baseVector, conversation_style: null, message_frequency: null, date_atmosphere: null } });
+  const a = profile("a", { vector: firstAnswers(3) });
   const b = profile("b");
   assert.equal(similarityScore(a, b), 1);
   assert.equal(isEligiblePair(a, b), true);
-  const onlyTwoShared = profile("b", { vector: { ...baseVector, novelty: null } });
+  const onlyTwoShared = profile("b", { vector: { ...baseVector, dont_talk_much: null } });
   assert.equal(similarityScore(a, onlyTwoShared), null);
   assert.equal(isEligiblePair(a, onlyTwoShared), false);
-  assert.equal(similarityScore(a, { ...b, questionnaireVersion: "2.0.0" }), null);
-  assert.equal(similarityScore({ ...a, questionnaireVersion: "2.0.0" }, { ...b, questionnaireVersion: "2.0.0" }), null);
+  assert.equal(similarityScore(a, { ...b, questionnaireVersion: "1.0.0" }), null);
+  assert.equal(similarityScore({ ...a, questionnaireVersion: "1.0.0" }, { ...b, questionnaireVersion: "1.0.0" }), null);
 });
 
 test("missing answers are ignored, and malformed vectors fail closed", () => {
-  const a = profile("a", { vector: { ...baseVector, message_frequency: null } });
-  const b = profile("b", { vector: { ...baseVector, message_frequency: 0 } });
+  const a = profile("a", { vector: { ...baseVector, feel_emotions: null } });
+  const b = profile("b", { vector: { ...baseVector, feel_emotions: 0 } });
   assert.equal(similarityScore(a, b), 1);
   const malformed = [
-    { ...baseVector, social_setting: -0.1 },
-    { ...baseVector, social_setting: 1.1 },
-    { ...baseVector, social_setting: NaN },
-    { ...baseVector, social_setting: undefined },
+    { ...baseVector, life_of_party: -0.1 },
+    { ...baseVector, life_of_party: 1.1 },
+    { ...baseVector, life_of_party: NaN },
+    { ...baseVector, life_of_party: undefined },
     { ...baseVector, unknown: 0.5 },
     null,
     [],
@@ -128,7 +128,7 @@ test("missing answers are ignored, and malformed vectors fail closed", () => {
 test("ranking orders by similarity with a deterministic tie break and returns only blind cards", () => {
   const viewer = profile("viewer");
   const farther = candidate("farther", "tok-farther", {
-    vector: { ...baseVector, social_setting: 1, planning_style: 1 },
+    vector: { ...baseVector, life_of_party: 1, talk_at_parties: 1 },
   });
   const nearZ = candidate("near-z", "tok-z");
   const nearA = candidate("near-a", "tok-a");
