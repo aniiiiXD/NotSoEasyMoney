@@ -1,8 +1,8 @@
 # Set up Google sign-in
 
-Google sign-in needs a Google Cloud project, OAuth client, session secret, and migrated Neon Postgres database. The OAuth client has not yet been configured or tested end to end. The local demo works without Google credentials; it is not a real Google account and stores its data in the configured Neon database.
+Google sign-in needs a Google Cloud project, OAuth client, session secret, and migrated Neon Postgres database. The production site has these configured, and a Google test account has signed in and created a registration in Neon. The local demo works without Google credentials; it is not a real Google account and stores its data in the configured Neon database.
 
-The fictional demo is available at [mystery-match-ani.vercel.app](https://mystery-match-ani.vercel.app). The application code now supports Neon Postgres, but the latest code and its database environment must be deployed before hosted profiles and chat can use it. Do not assume a deployed preview already has the new configuration.
+The site and fictional demo are available at [mystery-match-ani.vercel.app](https://mystery-match-ani.vercel.app). The Google app is in **Testing**: only accounts listed under Google Auth Platform → Audience → Test users can sign in. Google requires the app's branding configuration to be completed before publishing it for a wider audience.
 
 ## Vercel OAuth client
 
@@ -15,7 +15,7 @@ You can add the local redirect URIs described below to the same client. If the G
 
 In the [Mystery Match Vercel environment settings](https://vercel.com/aniiiixds-projects/mystery-match/settings/environment-variables), configure the client ID as `AUTH_GOOGLE_ID`, the client secret as `AUTH_GOOGLE_SECRET`, a strong `AUTH_SECRET`, and the pooled Neon connection string as `DATABASE_URL` for the intended environment. Set `APP_URL` to the public HTTPS origin for referral and QR links. Apply migrations to the same database using its direct `DATABASE_URL_UNPOOLED` and `npm run db:migrate` from a trusted environment. Never commit or share the secrets. Environment changes take effect on a new deployment.
 
-After deploying the configured application, test the complete sign-in and profile flow on the intended HTTPS URL. No real Google account flow has been verified yet. The rest of this guide covers local setup.
+After deploying configuration changes, test sign-in and the profile flow on the intended HTTPS URL. The rest of this guide covers local setup.
 
 ## 1. Create a Google OAuth client
 
@@ -66,4 +66,4 @@ If the Google button is disabled, confirm that `AUTH_SECRET`, `DATABASE_URL`, `A
 
 The app requests Google's OpenID and basic-profile scopes. It uses the stable Google subject to identify the account and does not put your Google name, email, or picture into the Mystery Match session or public profile. Auth.js checks state, PKCE and nonce during sign-in.
 
-A public launch requires its own HTTPS domain and registered callback, appropriate Google publishing settings, and production infrastructure and security review. A real Google account flow still needs to be tested once credentials have been added.
+A public launch requires appropriate Google branding and publishing settings, a registered HTTPS callback, and production infrastructure and security review.
