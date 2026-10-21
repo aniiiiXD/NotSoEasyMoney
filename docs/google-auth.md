@@ -2,7 +2,7 @@
 
 Google sign-in needs a Google Cloud project and OAuth client. The local demo works without those credentials; it is not a real Google account.
 
-The landing page is deployed at [mystery-match-ani.vercel.app](https://mystery-match-ani.vercel.app). Google sign-in is deliberately disabled on Vercel until the app has a hosted database; creating credentials alone does not make the deployed profile or chat flow operational.
+The fictional demo is deployed at [mystery-match-ani.vercel.app](https://mystery-match-ani.vercel.app). Google sign-in is deliberately disabled on Vercel until the app has a hosted database; creating credentials alone does not make real profiles or chat operational.
 
 ## Vercel OAuth client
 

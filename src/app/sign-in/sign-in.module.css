@@ -66,6 +66,7 @@
 .localButton:hover { background: #cdc8df; }
 .demo { margin: 0 0 20px; color: #6f706c; font-size: 13px; line-height: 1.55; }
 .demo > p { margin: 12px 0 18px; }
+.demoButton { text-decoration: none; }
 .demoButton:hover { background: #3b3b39; }
 .fine { margin: 24px 0 0; color: #6f706c; font-size: 12px; line-height: 1.6; }
 .foot { margin: 22px 0 0; color: #6f706c; text-align: center; font-size: 12px; }

@@ -51,6 +51,7 @@ export default async function SignInPage({ searchParams }: {
   const { error } = await searchParams;
   const errorMessage = signInErrorMessage(error);
   const showDemo = localDemoEnabled() && isLoopbackHost((await headers()).get("host"));
+  const showHostedPreview = Boolean(process.env.VERCEL);
   return (
     <main className={styles.page}>
       <header className={styles.top}>
@@ -65,6 +66,11 @@ export default async function SignInPage({ searchParams }: {
         {showDemo && <div className={styles.demo}>
           <form action={demoLogin}><button className={styles.demoButton} type="submit">Try the local demo</button></form>
           <p>Explore with sample profiles. Starting the demo creates a fresh session on this device.</p>
+          <div className={styles.rule}><span>OR SIGN IN</span></div>
+        </div>}
+        {showHostedPreview && <div className={styles.demo}>
+          <Link className={styles.demoButton} href="/preview">Try the demo</Link>
+          <p>Explore with fictional people and conversations. No account needed.</p>
           <div className={styles.rule}><span>OR SIGN IN</span></div>
         </div>}
         <form action={googleLogin}>

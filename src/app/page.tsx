@@ -2,6 +2,9 @@ import Link from "next/link";
 
 export default function Home() {
   const demoAvailable = process.env.NODE_ENV === "development" && Boolean(process.env.AUTH_SECRET);
+  const hostedPreview = Boolean(process.env.VERCEL);
+  const startHref = hostedPreview ? "/preview" : "/join";
+  const startLabel = hostedPreview ? "Try the demo" : "Get started";
   return (
     <div className="landing" id="top">
       <header className="landing-header">
@@ -13,7 +16,7 @@ export default function Home() {
           </nav>
           <div className="header-links">
             <Link className="header-sign-in" href="/sign-in">Sign in</Link>
-            <Link className="header-start" href="/join">Get started</Link>
+            <Link className="header-start" href={startHref}>{startLabel}</Link>
           </div>
         </div>
       </header>
@@ -25,10 +28,10 @@ export default function Home() {
             <h1 id="hero-title">Get to know someone before you see them.</h1>
             <p className="hero-description">A good connection is more than a first impression. Start with personality and conversation. Photos can wait.</p>
             <div className="hero-actions">
-              <Link className="landing-button" href={demoAvailable ? "/sign-in" : "/join"}>{demoAvailable ? "Try the demo" : "Get started"}</Link>
+              <Link className="landing-button" href={hostedPreview ? "/preview" : demoAvailable ? "/sign-in" : "/join"}>{hostedPreview || demoAvailable ? "Try the demo" : "Get started"}</Link>
               <a className="landing-text-link" href="#how-it-works">See how it works <span aria-hidden="true">↓</span></a>
             </div>
-            {demoAvailable && <p className="demo-hint">Explore a local preview with sample profiles and conversations.</p>}
+            {(demoAvailable || hostedPreview) && <p className="demo-hint">Explore with fictional profiles and conversations.</p>}
           </div>
           <figure className="conversation-prompt">
             <figcaption>A question to start with</figcaption>
@@ -77,7 +80,7 @@ export default function Home() {
           </div>
           <div className="approach-copy">
             <p>What makes you laugh. The things you care about. How you spend a quiet Sunday. That&apos;s the good stuff, and it deserves to come first.</p>
-            <Link className="landing-text-link" href="/join">Get started <span aria-hidden="true">→</span></Link>
+            <Link className="landing-text-link" href={startHref}>{startLabel} <span aria-hidden="true">→</span></Link>
           </div>
         </section>
 
@@ -87,7 +90,7 @@ export default function Home() {
               <p className="section-label">When you&apos;re ready</p>
               <h2 id="closing-title">Let&apos;s start with hello.</h2>
             </div>
-            <Link className="landing-button" href="/join">Get started</Link>
+            <Link className="landing-button" href={startHref}>{startLabel}</Link>
           </div>
         </section>
       </main>

@@ -2,7 +2,7 @@
 
 A local-first Next.js prototype for getting to know someone before seeing their photo. Adults can create a nickname, answer optional connection-preference questions, receive blind introductions, and open a private chat after both people choose each other.
 
-The [Vercel landing page](https://mystery-match-ani.vercel.app) is deployed for preview. The matching, profiles, and chat still depend on a local SQLite file, and Google sign-in is disabled on Vercel until hosted storage is implemented. This is not ready for a public launch.
+The [Vercel preview](https://mystery-match-ani.vercel.app) includes a fictional, account-free demo. Real matching, profiles, and chat still depend on a local SQLite file, and Google sign-in is disabled on Vercel until hosted storage is implemented. This is not ready for a public launch.
 
 ## Run locally
 
@@ -26,9 +26,11 @@ Open the local address printed by Next.js. The development server binds to `127.
 
 ## Try the demo
 
+On the hosted preview, choose **Try the demo** to walk through the sample flow without an account. Introductions, messages, and analytics are illustrative; the demo runs in the browser and resets when the page is refreshed.
+
 On the local sign-in page, choose **Try the local demo** to start a fresh session without Google credentials. In the profile wizard, **Explore with a sample profile** takes you straight to fictional introductions. To walk through the questions, choose **Use sample answers and review the questions**, or enter your own answers. Say hello to a sample introduction to open a mutual match and go directly to its conversation; messages receive a scripted sample reply. The **Sample analytics** link shows illustrative numbers, not live activity. Signing out and starting a new demo creates a fresh session.
 
-The demo is available only in development on a loopback address and requires the local `AUTH_SECRET`. Sample profiles are private to their demo session and are never shown to ordinary accounts. Demo activity is excluded from real analytics. Demo profiles and conversations are stored locally in the same database as other local data.
+The local sign-in demo is available only in development on a loopback address and requires the local `AUTH_SECRET`. Sample profiles are private to their demo session and are never shown to ordinary accounts. Demo activity is excluded from real analytics. Demo profiles and conversations are stored locally in the same database as other local data.
 
 With `LOCAL_TEST_LOGIN=true`, expand **Use a local test account** on the sign-in page for development-only test accounts. Enter a new handle and a passphrase of at least eight characters to create one; use the same passphrase to return. To try a match, create a second account in a separate browser profile or private window, give each account mutually compatible age and gender preferences, answer at least three of the same questions, and choose “Say hello” from both accounts. A conversation appears for both people. Chats refresh about every five seconds. Blocking someone closes the room for both people.
 
