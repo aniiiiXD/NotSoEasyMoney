@@ -17,14 +17,23 @@ export function isReferralAdmin(userId: unknown, env: Record<string, string | un
   return (env.REFERRAL_ADMIN_USER_IDS ?? "").split(",").map((id) => id.trim()).filter(Boolean).includes(userId);
 }
 
-export type ReferralSummary = { code: string; label: string; active: boolean; signups: number; profiles: number; url: string; qrUrl: string };
+export type ReferralSummary = { code: string; label: string; active: boolean; clicks: number; signups: number; profiles: number; payments: number; url: string; qrUrl: string };
 
 export async function listReferralSummaries(db: Pool): Promise<ReferralSummary[]> {
-  const { rows } = await db.query<{ code: string; label: string; active: boolean; signups: number; profiles: number }>(`SELECT c.code, c.label, c.active,
-    COUNT(a.user_id)::integer AS signups, COUNT(a.profile_completed_at)::integer AS profiles
-    FROM referral_codes c LEFT JOIN referral_attributions a ON a.code = c.code
-    GROUP BY c.code, c.label, c.active, c.created_at ORDER BY c.created_at DESC, c.code`);
+  const { rows } = await db.query<{ code: string; label: string; active: boolean; clicks: number; signups: number; profiles: number; payments: number }>(`SELECT c.code, c.label, c.active, c.clicks,
+    COUNT(DISTINCT a.user_id)::integer AS signups,
+    COUNT(DISTINCT a.user_id) FILTER (WHERE a.profile_completed_at IS NOT NULL)::integer AS profiles,
+    COUNT(DISTINCT o.order_id)::integer AS payments
+    FROM referral_codes c
+    LEFT JOIN referral_attributions a ON a.code = c.code
+    LEFT JOIN payment_orders o ON o.user_id = a.user_id AND o.status = 'paid'
+    GROUP BY c.code, c.label, c.active, c.created_at, c.clicks ORDER BY c.created_at DESC, c.code`);
   return rows.map((row) => ({ ...row, url: referralUrl(row.code), qrUrl: `${referralUrl(row.code)}/qr` }));
+}
+
+/** Best-effort visit counter; callers must not let failures block the redirect. */
+export async function recordReferralClick(db: Pool, code: string): Promise<void> {
+  await db.query("UPDATE referral_codes SET clicks = clicks + 1 WHERE code = $1 AND active = true", [code]);
 }
 
 export async function createReferral(db: Pool, inputCode: unknown, inputLabel: unknown): Promise<"created" | "invalid" | "exists"> {
@@ -91,7 +100,7 @@ export async function registerGoogleAccount(db: Pool, userId: string, code: stri
 export function referralUrl(code: string): string {
   const normalized = normalizeReferralCode(code);
   if (!normalized) throw new Error("Invalid referral code.");
-  const origin = new URL(process.env.APP_URL || "https://mystery-match-ani.vercel.app");
+  const origin = new URL(process.env.APP_URL || "https://mystery-match-dating.vercel.app");
   const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(origin.hostname);
   if ((origin.protocol !== "https:" && !(origin.protocol === "http:" && loopback)) || origin.username || origin.password || origin.pathname !== "/" || origin.search || origin.hash) {
     throw new Error("APP_URL must be an HTTPS origin (or a local HTTP origin for testing).");

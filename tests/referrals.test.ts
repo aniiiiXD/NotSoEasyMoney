@@ -2,7 +2,7 @@ import { after, test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { getDb } from "../src/lib/db.ts";
-import { getActiveReferral, normalizeReferralCode, REFERRAL_MAX_AGE, referralUrl, registerGoogleAccount, signReferralCode, verifyReferralCode } from "../src/lib/referrals.ts";
+import { getActiveReferral, listReferralSummaries, normalizeReferralCode, recordReferralClick, REFERRAL_MAX_AGE, referralUrl, registerGoogleAccount, signReferralCode, verifyReferralCode } from "../src/lib/referrals.ts";
 
 const databaseUrl = process.env.DATABASE_URL;
 let databaseName = "";
@@ -61,5 +61,40 @@ test("only a new Google account can claim an active referral, even concurrently"
   } finally {
     await db.query("DELETE FROM app_users WHERE user_id = ANY($1::text[])", [users]);
     await db.query("DELETE FROM referral_codes WHERE code = ANY($1::text[])", [[a, b]]);
+  }
+});
+
+test("invitation clicks, signups and captured payments are counted per code", async () => {
+  const id = randomUUID().replaceAll("-", "").slice(0, 12).toUpperCase();
+  const code = `C${id}`;
+  const userId = `google:test-${id}-payer`;
+  try {
+    await db.query("INSERT INTO referral_codes (code, label) VALUES ($1, 'Creator C')", [code]);
+    let summary = (await listReferralSummaries(db)).find((item) => item.code === code)!;
+    assert.equal(summary.clicks, 0);
+    assert.equal(summary.payments, 0);
+    await recordReferralClick(db, code);
+    await recordReferralClick(db, code);
+    await db.query("INSERT INTO app_users (user_id) VALUES ($1)", [userId]);
+    await db.query("INSERT INTO referral_attributions (user_id, code) VALUES ($1, $2)", [userId, code]);
+    // One member, two captured payments and one refunded payment.
+    const orderIds = [1, 2, 3].map(() => `order_${randomUUID().replaceAll("-", "")}`);
+    const statuses = ["paid", "paid", "refunded"];
+    for (const [index, orderId] of orderIds.entries()) {
+      await db.query(
+        "INSERT INTO payment_orders (order_id, user_id, receipt, key_id, mode, amount, currency, status) VALUES ($1, $2, $3, 'rzp_test_disposable', 'test', 2000, 'INR', $4)",
+        [orderId, userId, `receipt_${orderId}`, statuses[index]]);
+    }
+    summary = (await listReferralSummaries(db)).find((item) => item.code === code)!;
+    assert.equal(summary.clicks, 2);
+    assert.equal(summary.signups, 1, "multiple payments must not inflate signups");
+    assert.equal(summary.payments, 2, "only captured payments count");
+    assert.equal(summary.profiles, 0);
+    await db.query("UPDATE payment_orders SET status = 'refunded' WHERE order_id = $1", [orderIds[0]]);
+    summary = (await listReferralSummaries(db)).find((item) => item.code === code)!;
+    assert.equal(summary.payments, 1, "refunds drop out of the payment count");
+  } finally {
+    await db.query("DELETE FROM app_users WHERE user_id = $1", [userId]);
+    await db.query("DELETE FROM referral_codes WHERE code = $1", [code]);
   }
 });

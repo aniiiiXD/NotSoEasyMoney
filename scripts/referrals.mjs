@@ -8,7 +8,7 @@ if (!connectionString) throw new Error("DATABASE_URL is required.");
 if (!["create", "list", "disable", "enable"].includes(action)) throw new Error("Use: referrals create CODE LABEL, list, disable CODE, or enable CODE.");
 if (action !== "list" && !/^[A-Z0-9][A-Z0-9_-]{2,31}$/.test(code)) throw new Error("Code must have 3–32 letters, numbers, hyphens or underscores and start with a letter or number.");
 if (action === "create" && (!label || [...label].length > 80)) throw new Error("A label between 1 and 80 characters is required.");
-const origin = new URL(process.env.APP_URL || "https://mystery-match-ani.vercel.app");
+const origin = new URL(process.env.APP_URL || "https://mystery-match-dating.vercel.app");
 const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(origin.hostname);
 if ((origin.protocol !== "https:" && !(origin.protocol === "http:" && loopback)) || origin.username || origin.password || origin.pathname !== "/" || origin.search || origin.hash) throw new Error("APP_URL must be an HTTPS origin, or a local HTTP origin.");
 const pool = new pg.Pool({ connectionString, enableChannelBinding: true, max: 1 });
@@ -23,11 +23,14 @@ try {
     if (!result.rowCount) throw new Error("Referral code was not found.");
     console.log(`${code} ${action === "enable" ? "enabled" : "disabled"}.`);
   } else {
-    const { rows } = await pool.query(`SELECT c.code, c.label, c.active,
-      COUNT(a.user_id)::integer AS signups,
-      COUNT(a.profile_completed_at)::integer AS profiles
-      FROM referral_codes c LEFT JOIN referral_attributions a ON a.code = c.code
-      GROUP BY c.code, c.label, c.active ORDER BY c.created_at, c.code`);
+    const { rows } = await pool.query(`SELECT c.code, c.label, c.active, c.clicks,
+      COUNT(DISTINCT a.user_id)::integer AS signups,
+      COUNT(DISTINCT a.user_id) FILTER (WHERE a.profile_completed_at IS NOT NULL)::integer AS profiles,
+      COUNT(DISTINCT o.order_id)::integer AS payments
+      FROM referral_codes c
+      LEFT JOIN referral_attributions a ON a.code = c.code
+      LEFT JOIN payment_orders o ON o.user_id = a.user_id AND o.status = 'paid'
+      GROUP BY c.code, c.label, c.active, c.created_at, c.clicks ORDER BY c.created_at, c.code`);
     if (!rows.length) console.log("No referral codes yet.");
     else console.table(rows);
   }

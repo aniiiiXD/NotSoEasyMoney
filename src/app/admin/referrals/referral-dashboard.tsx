@@ -46,11 +46,11 @@ export default function ReferralDashboard({ initialReferrals }: { initialReferra
       <div className={styles.listHeading}><div><h2 id="links-title">Your links</h2><p>{referrals.length} {referrals.length === 1 ? "link" : "links"}</p></div></div>
       {referrals.length === 0 ? <p className={styles.empty}>No links yet. Create one above to get started.</p> : referrals.map((referral) => <article className={styles.card} key={referral.code}>
         <div className={styles.cardTitle}><div><h3>{referral.label}</h3><p>{referral.code}</p></div><span className={referral.active ? styles.active : styles.inactive}>{referral.active ? "Active" : "Disabled"}</span></div>
-        <div className={styles.stats}><div><strong>{referral.signups}</strong><span>Signups</span></div><div><strong>{referral.profiles}</strong><span>Profiles completed</span></div></div>
+        <div className={styles.stats}><div><strong>{referral.clicks}</strong><span>Clicks</span></div><div><strong>{referral.signups}</strong><span>Signups</span></div><div><strong>{referral.payments}</strong><span>Payments</span></div><div><strong>{referral.profiles}</strong><span>Profiles completed</span></div></div>
         <label className={styles.linkLabel}>Share link<input readOnly value={referral.url} onFocus={(event) => event.currentTarget.select()} /></label>
         <div className={styles.actions}><button type="button" onClick={() => copy(referral.url)}>Copy link</button>{referral.active && <a href={referral.qrUrl} target="_blank" rel="noreferrer">Open QR code</a>}<button type="button" disabled={busy} onClick={async () => { if (await mutate("PATCH", { code: referral.code, active: !referral.active })) setStatus(referral.active ? "Link disabled." : "Link enabled."); }}>{referral.active ? "Disable" : "Enable"}</button></div>
       </article>)}
-      <p className={styles.footnote}>A signup is counted when a new Google account registers with the invitation. Returning members and link visits aren’t counted. These exact counts are private.</p>
+      <p className={styles.footnote}>Clicks count visits to the invitation link, including QR scans and repeat visits. A signup is counted when a new Google account registers with the invitation; returning members don’t add signups. Payments are captured payments by those members; refunds remove them. These exact counts are private.</p>
     </section>
   </>;
 }
