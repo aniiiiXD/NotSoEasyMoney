@@ -10,7 +10,7 @@ import styles from "../app.module.css";
 const genderOptions = ["woman", "man", "nonbinary", "another identity"] as const;
 const lastStep = QUESTIONS.length + 1;
 
-export default function ProfileForm({ initial, logout }: { initial: ProfileInput | null; logout: () => Promise<void> }) {
+export default function ProfileForm({ initial, logout, paymentRequired, price, testMode }: { initial: ProfileInput | null; logout: () => Promise<void>; paymentRequired: boolean; price: string; testMode: boolean }) {
   const router = useRouter();
   const [alias, setAlias] = useState(initial?.alias ?? "");
   const [age, setAge] = useState(initial ? String(initial.age) : "");
@@ -49,7 +49,7 @@ export default function ProfileForm({ initial, logout }: { initial: ProfileInput
       const response = await fetch("/api/profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(profile) });
       const body = await response.json();
       if (!response.ok) { setError(body.error ?? "Could not save your profile."); return; }
-      router.push("/discover");
+      router.push(body.nextUrl === "/checkout" ? "/checkout" : "/discover");
       router.refresh();
     } catch {
       setError("Could not connect. Please check your connection and try again.");
@@ -85,6 +85,7 @@ export default function ProfileForm({ initial, logout }: { initial: ProfileInput
         <form className={styles.form} onSubmit={submit}>
           {step === 0 && <section className={styles.formSection} aria-labelledby="about-title">
             <div className={styles.intro}><p className={styles.kicker}>Let’s start here</p><h1 id="about-title">A little about you.</h1><p>Choose a nickname that doesn’t identify you. Mystery Match is for adults 18 and over.</p></div>
+            {paymentRequired && <p className={styles.notice}>Each new introduction costs {price} after your profile is ready. {testMode && "Test mode: no real money is charged."}</p>}
             <div className={styles.fieldGrid}>
               <label className={styles.field}>Your nickname<input required minLength={2} maxLength={24} value={alias} onChange={(event) => setAlias(event.target.value)} placeholder="e.g. moonbeam" autoComplete="off" /></label>
               <label className={styles.field}>Your age<input required type="number" min={18} max={120} value={age} onChange={(event) => setAge(event.target.value)} placeholder="18+" inputMode="numeric" /></label>
@@ -111,12 +112,13 @@ export default function ProfileForm({ initial, logout }: { initial: ProfileInput
             </div>
             <p className={styles.answerCount}>{answered} of {QUESTIONS.length} questions answered</p>
             <p className={styles.helper}>Your answers help suggest introductions; they can’t predict chemistry.</p>
+            {paymentRequired && <div className={styles.notice}><strong>One new introduction · {price}</strong><p>Your profile is saved before checkout. Pay using UPI or another available payment method. Each payment reveals one person. No subscription; payment does not guarantee a mutual match.{testMode && " This is a test payment; no real money is charged."}</p></div>}
           </section>}
 
           {error && <div className={styles.error} role="alert"><p>{error}</p>{step === lastStep && answered < 3 && <button type="button" onClick={() => goToStep(1)}>Review questions</button>}</div>}
           <div className={styles.submitRow}>
             {step > 0 && <button className={styles.backButton} type="button" onClick={() => goToStep(step - 1)}>Back</button>}
-            <button className={styles.primary} disabled={saving} type="submit">{saving ? "Saving…" : step < lastStep ? "Continue" : initial ? "Save preferences" : "See introductions"}</button>
+            <button className={styles.primary} disabled={saving} type="submit">{saving ? "Saving…" : step < lastStep ? "Continue" : paymentRequired ? `Continue to payment · ${price}` : initial ? "Save preferences" : "See introductions"}</button>
           </div>
         </form>
       </main>

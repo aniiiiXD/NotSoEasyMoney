@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { getDb } from "@/lib/db";
 import { getOwnProfile, saveProfile } from "@/lib/local-matching";
 import { isSameOrigin, readJsonWithLimit, RequestBodyTooLarge } from "@/lib/request";
+import { discoveryAccess } from "@/lib/discovery-access";
 
 export const runtime = "nodejs";
 
@@ -19,7 +20,8 @@ export async function POST(request: Request) {
   if (Number(request.headers.get("content-length") || 0) > 16384) return Response.json({ error: "Profile is too large." }, { status: 413 });
   try {
     const result = await saveProfile(getDb(), userId, await readJsonWithLimit(request, 16384));
-    return Response.json(result);
+    const access = await discoveryAccess(userId);
+    return Response.json({ ...result, nextUrl: access.allowed ? "/discover" : "/checkout" });
   } catch (error) {
     if (error instanceof RequestBodyTooLarge) return Response.json({ error: "Profile is too large." }, { status: 413 });
     if (error instanceof TypeError || error instanceof SyntaxError) return Response.json({ error: error.message }, { status: 400 });

@@ -86,6 +86,13 @@
 .empty p { max-width: 420px; margin: 12px 0 22px; color: #777670; font-size: 14px; line-height: 1.65; }
 .notice { margin: 30px 0 0; padding: 14px 16px; border-left: 3px solid #aaa4bc; background: #f0eef5; color: #514b64; font-size: 14px; line-height: 1.5; }
 .notice a { font-weight: 700; text-underline-offset: 3px; }
+.notice p { margin: 10px 0 0; }
+.paymentSummary { margin: 28px 0; padding: 24px 0; border-block: 1px solid #e3e1dc; }
+.paymentSummary div { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; }
+.paymentSummary dt { font-size: 15px; font-weight: 650; }
+.paymentSummary dd { margin: 0; font-size: 22px; font-weight: 650; white-space: nowrap; }
+.paymentActions { display: grid; gap: 12px; margin-top: 28px; }
+.paymentActions button { width: 100%; }
 @media (min-width: 680px) {
   .header { padding: 0 32px; }
   .headerTop { min-height: 76px; }

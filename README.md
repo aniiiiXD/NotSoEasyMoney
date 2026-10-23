@@ -2,7 +2,7 @@
 
 A Next.js prototype for getting to know someone before seeing their photo. Adults can create a nickname, answer connection-preference questions, receive blind introductions, and open a private chat after both people choose each other.
 
-The [deployed application](https://mystery-match-ani.vercel.app) uses Neon Postgres for profiles, matching, chat, referrals, and opt-in analytics. Google sign-in has been tested through account registration on the deployed site, but Google currently permits only configured test users. This is not ready for a public launch. For frontend integration, see the [frontend handoff](docs/frontend-handoff.md).
+The [deployed application](https://mystery-match-dating.vercel.app) uses Neon Postgres for profiles, matching, chat, referrals, and opt-in analytics. Google sign-in has been tested through account registration on the deployed site, but Google currently permits only configured test users. This is not ready for a public launch. For frontend integration, see the [frontend handoff](docs/frontend-handoff.md).
 
 ## Run locally
 
@@ -31,9 +31,42 @@ Google sign-in is configured on the production deployment and has been tested th
 
 For local development, create a Google OAuth **Web application** client, add your Google account as a test user if the app is in testing, and register the exact callback URL for your local host and port, such as `http://127.0.0.1:3002/api/auth/callback/google`. Add the client ID and secret as `AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET` in `.env.local` and restart. Leave `AUTH_URL` and `NEXTAUTH_URL` unset for this local setup. Google identity details are not shown in blind introductions; the application uses the provider subject to associate the login with the account.
 
+## Paid introductions and Razorpay UPI checkout
+
+The payment gate is **off by default**. When enabled, the questionnaire discloses the price per introduction from its first screen and again before the final button. The final button saves the profile and opens `/checkout`; cancelling or losing the network preserves the saved profile. Checkout uses Razorpay Standard Web Checkout, including UPI when enabled on the merchant account. No subscription is created and no match is guaranteed.
+
+The server filters `/discover` and candidate API reads to purchased introductions while billing is enabled. Only `POST /api/introductions/reveal` spends a payment, atomically, for one eligible person. GET requests, prefetches and refreshes never spend payments. Concurrent reveal retries return the same undecided person. An empty pool leaves the payment unused. Orders belong to the signed-in Google account, use the server's price, and persist in Postgres. Only a captured payment supplies one introduction credit. A consumed payment cannot reveal a second person; another payment is required. Paid members do not pay again for profile edits. Existing chat remains accessible. Test purchases never unlock live-mode access. Full or partial refunds revoke that purchase's access; account deletion cascades payment records, and late webhooks cannot restore a deleted account.
+
+Configuration (server environment variables):
+
+```dotenv
+DISCOVERY_PAYWALL_ENABLED=false
+DISCOVERY_PRICE_PAISE=2000
+RAZORPAY_KEY_ID=
+RAZORPAY_KEY_SECRET=
+RAZORPAY_WEBHOOK_SECRET=
+```
+
+`2000` is ₹20 per new introduction; `100` is ₹1. The price is configurable and is never trusted from the browser. The public key ID is returned with each order, so changing keys does not depend on a stale browser build. `NEXT_PUBLIC_RAZORPAY_KEY_ID` is optional for compatibility and the secret must never use a public prefix. Keep all credentials in ignored environment files or Vercel's secret settings.
+
+Apply `npm run db:migrate` using `DATABASE_URL_UNPOOLED` before enabling the flag. In Razorpay, enable automatic capture. The app automatically creates or updates its webhook in the mode selected by the keys before creating the first new order, so switching to live credentials does not require another manual webhook step. This fails closed if merchant webhook permissions are unavailable. It uses the configured `RAZORPAY_WEBHOOK_SECRET`:
+
+```text
+https://mystery-match-dating.vercel.app/api/payments/razorpay/webhook
+payment.authorized, payment.captured, payment.failed, order.paid, refund.processed
+```
+
+`npm run payments:setup` registers or resyncs this app's webhook for the mode selected by the supplied API keys. It first probes the deployed endpoint to confirm the signing secret matches; it never prints credentials. This is also the recovery command if the merchant account changes or a webhook is deleted/disabled. Test mode does not collect real money. Live mode requires approval of the correct business, website and payment methods.
+
+Launch after the migration: set Vercel Production `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` to the approved live pair, set `DISCOVERY_PAYWALL_ENABLED=true`, and redeploy. Keep the configured webhook secret. Turning the flag back to `false` reopens introductions without changing purchases; authenticated verification and signed webhook processing continue while the flag is off.
+
+Endpoints: `POST /api/create-order` (signed in, flag on, complete profile), `POST /api/verify-payment` (account-owned order and HMAC-SHA256 proof), `POST /api/payments/status` (reconcile a pending order when browser confirmation was lost), and `POST /api/payments/razorpay/webhook` (raw-body signature, no browser session). The API returns 402 for an unpaid reveal or decision on a locked person, 400 for invalid proofs or price manipulation, and 401 for missing authentication. Provider responses are re-fetched before applying state. Row locks and monotonic refund/capture handling make duplicate and out-of-order notifications safe.
+
+The payment tests require a migrated, isolated `mm_test_` Postgres database. Run `node --test tests/billing-config.test.ts tests/razorpay.test.ts` for isolated unit tests, and use the test database environment for `tests/payments.test.ts`. `scripts/e2e-billing.mjs --setup` prepares local browser onboarding with simulated identities and real Razorpay test orders; `--verify` checks capture, access control and simulated signed-webhook replay against the real provider API. It refuses non-test databases, non-local app origins and live keys.
+
 ## Influencer referrals
 
-The unlisted `/admin/referrals` dashboard lets anyone with the URL create links, view signup and profile counts, open QR codes, and disable or re-enable invitations. Keep the URL private if you do not want other people to manage links. The support inbox remains protected by `REFERRAL_ADMIN_USER_IDS`; set it to a comma-separated list of the exact authenticated Google user IDs (`google:` followed by the provider subject). Set `APP_URL` to the public HTTPS origin, or a loopback HTTP origin for local testing; it determines the invitation and QR destinations.
+The unlisted `/admin/referrals` dashboard lets anyone with the URL create links, view click, signup, payment, and completed-profile counts, open QR codes, and disable or re-enable invitations. Keep the URL private if you do not want other people to manage links. The support inbox remains protected by `REFERRAL_ADMIN_USER_IDS`; set it to a comma-separated list of the exact authenticated Google user IDs (`google:` followed by the provider subject). Set `APP_URL` to the public HTTPS origin, or a loopback HTTP origin for local testing; it determines the invitation and QR destinations.
 
 Codes can also be managed from a trusted operator environment with `DATABASE_URL` set:
 
@@ -44,7 +77,7 @@ npm run referrals -- disable CREATOR1
 npm run referrals -- enable CREATOR1
 ```
 
-The create command prints an invitation link at `/r/CREATOR1` and a QR image at `/r/CREATOR1/qr`. Codes are 3–32 letters, numbers, hyphens, or underscores, beginning with a letter or number; they are normalized to uppercase. A visitor can remove an invitation before signing in. The first valid invitation is held for up to 30 days and is credited only when a Google account is first registered while the code remains active. Returning Google accounts do not create referral signups. The list command separately shows attributed Google signups and how many subsequently created a profile; it does not count link clicks.
+The create command prints an invitation link at `/r/CREATOR1` and a QR image at `/r/CREATOR1/qr`. Codes are 3–32 letters, numbers, hyphens, or underscores, beginning with a letter or number; they are normalized to uppercase. A visitor can remove an invitation before signing in. The first valid invitation is held for up to 30 days and is credited only when a Google account is first registered while the code remains active. Returning Google accounts do not create referral signups. The list command shows invitation-link clicks, attributed Google signups, how many subsequently created a profile, and captured payments by those members. Clicks count raw visits to the invitation link, including QR scans and repeat visits; disabled codes stop counting. Payments come from live order records, so refunds remove themselves and multiple payments by one member never inflate signup counts.
 
 Referral attribution is stored separately from opt-in usage analytics and associates the account ID with a code. The unlisted operator dashboard and CLI show exact counts without the analytics dashboard's small-group suppression; there is no influencer-facing reporting portal. Share the dashboard URL carefully because it has write access.
 

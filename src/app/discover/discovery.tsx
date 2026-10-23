@@ -4,11 +4,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { Candidate } from "@/lib/matching";
 import styles from "../app.module.css";
+import { useRouter } from "next/navigation";
 
 type ChoiceResult = { status: "matched" | "pending"; roomId?: string };
 type PendingChoice = { candidateId: string; decision: "like" | "pass" };
 
-export default function Discovery({ alias, initial, logout }: { alias: string; initial: Candidate[]; logout: () => Promise<void> }) {
+export default function Discovery({ alias, initial, logout, billing }: { alias: string; initial: Candidate[]; logout: () => Promise<void>; billing: { enabled: boolean; credit: boolean; price: string } }) {
+  const router = useRouter();
+  const [revealing, setRevealing] = useState(false);
   const [candidates, setCandidates] = useState(initial);
   const [busy, setBusy] = useState<PendingChoice | null>(null);
   const [results, setResults] = useState<Record<string, ChoiceResult>>({});
@@ -23,6 +26,21 @@ export default function Discovery({ alias, initial, logout }: { alias: string; i
   function dismiss(candidateId: string) {
     setCandidates((previous) => previous.filter((candidate) => candidate.candidateId !== candidateId));
     setFocusedResult("");
+  }
+
+  async function reveal() {
+    if (revealing) return;
+    setRevealing(true); setNotice("");
+    try {
+      const response = await fetch("/api/introductions/reveal", { method: "POST" });
+      const body = await response.json();
+      if (response.status === 402) { router.push("/checkout"); return; }
+      if (!response.ok) throw new Error(body.error || "Could not reveal an introduction.");
+      setCandidates(body.candidates); setResults({});
+      if (!body.candidates.length) setNotice("No new introductions right now. Your unused payment is saved for when someone eligible joins.");
+      router.refresh();
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Could not connect. Please try again."); }
+    finally { setRevealing(false); }
   }
 
   async function choose(candidateId: string, decision: "like" | "pass") {
@@ -55,6 +73,10 @@ export default function Discovery({ alias, initial, logout }: { alias: string; i
     <main className={styles.discovery}>
       <div className={styles.discoveryHeader}><p className={styles.kicker}>Your introductions</p><h1>Good to see you, {alias}.</h1><p>Get to know someone, one conversation at a time.</p></div>
       {notice && <p className={styles.notice} role="status">{notice}</p>}
+      {billing.enabled && candidates.length === 0 && <div className={styles.notice}>
+        <p>Each payment unlocks one new person. No subscription and no guaranteed mutual match. Refreshing never charges you again.</p>
+        {billing.credit ? <button className={styles.primary} disabled={revealing} onClick={() => void reveal()}>{revealing ? "Finding an introduction…" : "Reveal my paid introduction"}</button> : <Link className={styles.primary} href="/checkout">See a new person · {billing.price}</Link>}
+      </div>}
       {candidates.length > 0 ? <div className={styles.candidateGrid}>{candidates.map((candidate) => {
         const result = results[candidate.candidateId];
         if (result) return <article className={styles.candidate} id={`result-${candidate.candidateId}`} key={candidate.candidateId} tabIndex={-1} role="status">

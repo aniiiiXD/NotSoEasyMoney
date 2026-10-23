@@ -6,6 +6,7 @@ import { lockProfiles, withTransaction } from "./db.ts";
 import { isEligiblePair, rankCandidates, type Candidate, type MatchingProfile } from "./matching.ts";
 import { emptyAnswers, normalizeAnswers, parsePersonalityAnswers, QUESTIONNAIRE_VERSION, type PersonalityAnswers, type PersonalityVector } from "./personality.ts";
 import { isReservedDemoIdentity, sameMatchingPool } from "./demo.ts";
+import { BillingError, type PaymentMode } from "./billing-config.ts";
 
 export const GENDERS = ["woman", "man", "nonbinary", "another identity"] as const;
 type Gender = (typeof GENDERS)[number];
@@ -139,8 +140,10 @@ async function matchingProfiles(db: Database, rows: ProfileRow[]): Promise<Map<s
   return new Map(rows.map((row) => [row.user_id, asMatchingProfile(row, blockedByActor.get(row.user_id) ?? [], passedByActor.get(row.user_id) ?? [])]));
 }
 
-export async function listCandidates(db: Pool, viewerId: string): Promise<Candidate[] | null> {
+export async function listCandidates(db: Pool, viewerId: string, billing?: { mode: PaymentMode; reveal?: boolean }): Promise<Candidate[] | null> {
   return withTransaction(db, async (client) => {
+    // Only an explicit POST may spend a payment. Serialize competing reveals.
+    if (billing?.reveal) await client.query("SELECT user_id FROM app_users WHERE user_id = $1 FOR UPDATE", [viewerId]);
     const initialViewer = await getRow(client, viewerId);
     if (!initialViewer) return null;
     if (isReservedDemoIdentity(viewerId)) return [];
@@ -187,20 +190,44 @@ export async function listCandidates(db: Pool, viewerId: string): Promise<Candid
     const ranked = rankCandidates(viewer, eligible.map(({ row, profile }) => ({
       profile, candidateId: tokenByTarget.get(row.user_id)!, blindAlias: row.alias,
     })));
-    return ranked;
+    if (!billing) return ranked;
+    const unlocked = await client.query<{ target_id: string }>(`SELECT i.target_id FROM paid_introductions i
+      JOIN payment_orders o ON o.order_id = i.order_id
+      WHERE i.viewer_id = $1 AND i.mode = $2 AND o.status = 'paid'`, [viewerId, billing.mode]);
+    const visibleTargets = new Set(unlocked.rows.map(row => row.target_id));
+    const targetByToken = new Map(tokens.rows.map(row => [row.token, row.target_id]));
+    if (billing.reveal) {
+      // Retrying the reveal or refreshing never spends another payment while
+      // there is an undecided introduction. No eligible person means no spend.
+      const existing = ranked.some(candidate => visibleTargets.has(targetByToken.get(candidate.candidateId)!));
+      const next = ranked.find(candidate => !visibleTargets.has(targetByToken.get(candidate.candidateId)!));
+      if (!existing && next) {
+        const order = await client.query<{ order_id: string }>(`SELECT o.order_id FROM payment_orders o
+          WHERE o.user_id = $1 AND o.mode = $2 AND o.status = 'paid'
+          AND NOT EXISTS (SELECT 1 FROM paid_introductions i WHERE i.order_id = o.order_id)
+          ORDER BY o.created_at, o.order_id LIMIT 1 FOR UPDATE`, [viewerId, billing.mode]);
+        if (!order.rows[0]) throw new BillingError("Pay for one new introduction to continue.", 402);
+        const targetId = targetByToken.get(next.candidateId)!;
+        await client.query("INSERT INTO paid_introductions (order_id, viewer_id, target_id, mode) VALUES ($1,$2,$3,$4)", [order.rows[0].order_id, viewerId, targetId, billing.mode]);
+        visibleTargets.add(targetId);
+      }
+    }
+    return ranked.filter(candidate => visibleTargets.has(targetByToken.get(candidate.candidateId)!));
   });
 }
 
 type DecisionResult = "matched" | "pending" | "passed" | "unavailable";
 type NewMatch = { roomId: string; firstUserId: string; secondUserId: string };
 
-export async function decideCandidate(db: Pool, viewerId: string, token: string, decision: "like" | "pass", onMatch?: (roomId: string, firstUserId: string, secondUserId: string) => void | Promise<void>): Promise<DecisionResult> {
+export async function decideCandidate(db: Pool, viewerId: string, token: string, decision: "like" | "pass", onMatch?: (roomId: string, firstUserId: string, secondUserId: string) => void | Promise<void>, paidMode?: PaymentMode): Promise<DecisionResult> {
   const result = await withTransaction<{ status: DecisionResult; newMatch: NewMatch | null }>(db, async (client) => {
     if (decision !== "like" && decision !== "pass") return { status: "unavailable", newMatch: null };
     const initial = await client.query<{ target_id: string }>(
       "SELECT target_id FROM candidate_tokens WHERE token = $1 AND viewer_id = $2 AND expires_at > $3", [token, viewerId, Date.now()]);
     const targetId = initial.rows[0]?.target_id;
     if (!targetId || !sameMatchingPool(viewerId, targetId)) return { status: "unavailable", newMatch: null };
+    if (paidMode && !(await client.query(`SELECT 1 FROM paid_introductions i JOIN payment_orders o ON o.order_id = i.order_id
+      WHERE i.viewer_id = $1 AND i.target_id = $2 AND i.mode = $3 AND o.status = 'paid'`, [viewerId, targetId, paidMode])).rowCount) throw new BillingError("This introduction has not been unlocked.", 402);
 
     // Recheck every mutable condition after taking the shared pair locks. This
     // serializes simultaneous likes, blocks, and profile edits for the pair.

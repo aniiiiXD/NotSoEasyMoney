@@ -1,6 +1,6 @@
 # Frontend handoff
 
-Mystery Match is a Next.js App Router prototype. The deployed site at https://mystery-match-ani.vercel.app uses Google sign-in and Neon Postgres. Google sign-in is currently restricted to the test users configured in Google Cloud.
+Mystery Match is a Next.js App Router prototype. The deployed site at https://mystery-match-dating.vercel.app uses Google sign-in and Neon Postgres. Google sign-in is currently restricted to the test users configured in Google Cloud.
 
 ## Current flow
 

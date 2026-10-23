@@ -2,13 +2,15 @@ import { auth } from "@/auth";
 import { getDb } from "@/lib/db";
 import { decideCandidate, listCandidates } from "@/lib/local-matching";
 import { isSameOrigin, readJsonWithLimit, RequestBodyTooLarge } from "@/lib/request";
+import { billingSettings, BillingError } from "@/lib/billing-config";
 
 export const runtime = "nodejs";
 
 export async function GET() {
   const userId = (await auth())?.user?.id;
   if (!userId) return Response.json({ error: "Sign in to continue." }, { status: 401 });
-  const candidates = await listCandidates(getDb(), userId);
+  const billing = billingSettings();
+  const candidates = await listCandidates(getDb(), userId, billing.enabled ? { mode: billing.mode } : undefined);
   if (!candidates) return Response.json({ error: "Finish your profile first." }, { status: 403 });
   return Response.json({ candidates }, { headers: { "Cache-Control": "no-store" } });
 }
@@ -25,12 +27,14 @@ export async function POST(request: Request) {
     const { candidateId, decision } = body as Record<string, unknown>;
     if (typeof candidateId !== "string" || candidateId.length > 100 || (decision !== "like" && decision !== "pass")) return Response.json({ error: "Invalid decision." }, { status: 400 });
     let matchedRoomId: string | undefined;
+    const billing = billingSettings();
     const status = await decideCandidate(getDb(), userId, candidateId, decision, (roomId) => {
       // The new room belongs to this signed-in member; let the client open it directly.
       matchedRoomId = roomId;
-    });
+    }, billing.enabled ? billing.mode : undefined);
     return status === "unavailable" ? Response.json({ error: "This introduction is no longer available." }, { status: 404 }) : Response.json({ status, ...(matchedRoomId ? { roomId: matchedRoomId } : {}) });
   } catch (error) {
+    if (error instanceof BillingError) return Response.json({ error: error.message, code: "PAYMENT_REQUIRED", checkoutUrl: "/checkout" }, { status: error.status });
     if (error instanceof RequestBodyTooLarge) return Response.json({ error: "Request is too large." }, { status: 413 });
     if (error instanceof SyntaxError || error instanceof TypeError) return Response.json({ error: "Invalid request." }, { status: 400 });
     return Response.json({ error: "Could not save your choice. Please try again." }, { status: 500 });

@@ -1,0 +1,8 @@
+.git/
+.next/
+node_modules/
+.local/
+catan-rl/
+.env*
+!.env.example
+coverage/

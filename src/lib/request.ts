@@ -19,7 +19,7 @@ export function isSameOrigin(request: Request): boolean {
 export class RequestBodyTooLarge extends Error {}
 
 /** Read JSON with a byte limit, even when Content-Length is missing or false. */
-export async function readJsonWithLimit(request: Request, limit: number): Promise<unknown> {
+export async function readBytesWithLimit(request: Request, limit: number): Promise<Uint8Array> {
   if (!request.body) throw new SyntaxError("Missing body");
   const reader = request.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -34,5 +34,9 @@ export async function readJsonWithLimit(request: Request, limit: number): Promis
   const bytes = new Uint8Array(total);
   let offset = 0;
   for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
-  return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+  return bytes;
+}
+
+export async function readJsonWithLimit(request: Request, limit: number): Promise<unknown> {
+  return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(await readBytesWithLimit(request, limit)));
 }

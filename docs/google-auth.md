@@ -1,21 +1,31 @@
 # Set up Google sign-in
 
-Google sign-in needs a Google Cloud project, OAuth client, session secret, and migrated Neon Postgres database. The production site has these configured, and a Google test account has signed in and created a registration in Neon. The local demo works without Google credentials; it is not a real Google account and stores its data in the configured Neon database.
+Google sign-in needs a Google Cloud project, OAuth client, session secret, and migrated Neon Postgres database. The production site has these configured, and a Google test account has signed in and created a registration in Neon.
 
-The site and fictional demo are available at [mystery-match-ani.vercel.app](https://mystery-match-ani.vercel.app). The Google app is in **Testing**: only accounts listed under Google Auth Platform → Audience → Test users can sign in. Google requires the app's branding configuration to be completed before publishing it for a wider audience.
+The production site is [mystery-match-dating.vercel.app](https://mystery-match-dating.vercel.app). If the Google app is in **Testing**, only accounts listed under Google Auth Platform → Audience → Test users can sign in. Google requires the app's branding configuration to be completed before publishing it for a wider audience.
 
 ## Vercel OAuth client
 
 In Google Auth Platform, create a **Web application** OAuth client and add these exact production values:
 
-- Authorized JavaScript origin: `https://mystery-match-ani.vercel.app`
-- Authorized redirect URI: `https://mystery-match-ani.vercel.app/api/auth/callback/google`
+- Authorized JavaScript origin: `https://mystery-match-dating.vercel.app`
+- Authorized redirect URI: `https://mystery-match-dating.vercel.app/api/auth/callback/google`
 
 You can add the local redirect URIs described below to the same client. If the Google app is in Testing, add each intended Google account under **Audience → Test users**.
 
 In the [Mystery Match Vercel environment settings](https://vercel.com/aniiiixds-projects/mystery-match/settings/environment-variables), configure the client ID as `AUTH_GOOGLE_ID`, the client secret as `AUTH_GOOGLE_SECRET`, a strong `AUTH_SECRET`, and the pooled Neon connection string as `DATABASE_URL` for the intended environment. Set `APP_URL` to the public HTTPS origin for referral and QR links. Apply migrations to the same database using its direct `DATABASE_URL_UNPOOLED` and `npm run db:migrate` from a trusted environment. Never commit or share the secrets. Environment changes take effect on a new deployment.
 
 After deploying configuration changes, test sign-in and the profile flow on the intended HTTPS URL. The rest of this guide covers local setup.
+
+## After a production domain change
+
+1. In **Google Cloud → Google Auth Platform → Clients**, edit the existing Web application client whose Client ID matches Vercel's `AUTH_GOOGLE_ID`. Add `https://mystery-match-dating.vercel.app` under **Authorized JavaScript origins** and `https://mystery-match-dating.vercel.app/api/auth/callback/google` under **Authorized redirect URIs**. Save the client. Keep any localhost callbacks needed for development. Editing URLs does not require a new client or secret.
+2. Update homepage, privacy policy and terms links under **Google Auth Platform → Branding** when those pages are available on the new domain.
+3. In **Vercel → mystery-match → Settings → Environment Variables**, set Production `APP_URL` to `https://mystery-match-dating.vercel.app` so new referral and QR links use that domain. The app derives Google callback URLs from the request host; if `AUTH_URL` or legacy `NEXTAUTH_URL` is explicitly configured with the old production domain, update it or remove the obsolete override. Do not set a production URL in local development.
+4. In **Vercel → Settings → Domains**, keep the new domain attached to Production and the old domain redirected to it. Avoid redirect loops. Redeploy after environment changes.
+5. Open `/api/auth/providers` on the new domain and check that Google's `callbackUrl` uses the new host. Then start sign-in on the new domain and verify that Google's authorization request uses that exact `redirect_uri`. Google must also have that URI saved on the matching client; an HTTP redirect from the old host does not replace registration with Google.
+
+The domain change does not require rotating `AUTH_SECRET`, the Google client secret, Neon credentials, or Razorpay keys. Keep the existing identity client and database to preserve accounts.
 
 ## 1. Create a Google OAuth client
 
