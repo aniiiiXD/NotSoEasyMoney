@@ -1,7 +1,7 @@
 import { after, beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
 import { getDb } from "../src/lib/db.ts";
-import { blockRoom, listRooms, readRoom, reportRoom, sendMessage } from "../src/lib/chat.ts";
+import { blockRoom, listRooms, normalizeInstagramHandle, readRoom, reportRoom, sendMessage, shareInstagram, withdrawInstagram } from "../src/lib/chat.ts";
 
 // These tests reset tables. Fail before opening a connection unless the caller
 // explicitly provides a disposable test database, never the application DB.
@@ -52,9 +52,11 @@ test("only active members can list, read, or send to a conversation", async () =
   assert.deepEqual(await sendMessage("local:eve", "room-1", "hello"), { ok: false, reason: "not_found" });
   const aliceRooms = await listRooms("local:alice");
   assert.equal(aliceRooms[0].alias, "Bob");
-  assert.deepEqual(Object.keys(aliceRooms[0]).sort(), ["alias", "id", "lastMessageAt"]);
+  assert.deepEqual(Object.keys(aliceRooms[0]).sort(), ["alias", "closed", "id", "lastMessageAt"]);
   assert.equal((await listRooms("local:bob"))[0].alias, "Alice");
-  assert.deepEqual(await readRoom("local:alice", "room-1"), { alias: "Bob", messages: [] });
+  assert.deepEqual(await readRoom("local:alice", "room-1"), {
+    alias: "Bob", messages: [], instagram: { mine: null, theirsReady: false, theirs: null, closed: false },
+  });
   const sent = await sendMessage("local:alice", "room-1", "  Hello, Bob.  ");
   assert.equal(sent.ok, true);
   assert.deepEqual((await readRoom("local:bob", "room-1"))?.messages.map(({ body, mine }) => ({ body, mine })), [
@@ -181,4 +183,55 @@ test("legacy sample rooms cannot be seen or used", async () => {
   assert.ok(!(await listRooms("local:alice")).some((room) => room.id === "old-sample-room"));
   assert.equal(await readRoom("local:alice", "old-sample-room"), null);
   assert.deepEqual(await sendMessage("local:alice", "old-sample-room", "Hello"), { ok: false, reason: "not_found" });
+});
+
+test("Instagram handles stay hidden until both share, then the room closes", async () => {
+  assert.deepEqual(await shareInstagram("local:eve", "room-1", "eve"), { ok: false, reason: "not_found" });
+  const first = await shareInstagram("local:alice", "room-1", "@Alice.Here");
+  assert.deepEqual(first, { ok: true, instagram: { mine: "alice.here", theirsReady: false, theirs: null, closed: false } });
+  assert.deepEqual((await readRoom("local:bob", "room-1"))?.instagram, { mine: null, theirsReady: true, theirs: null, closed: false });
+
+  const second = await shareInstagram("local:bob", "room-1", "bob_b");
+  assert.deepEqual(second, { ok: true, instagram: { mine: "bob_b", theirsReady: true, theirs: "alice.here", closed: true } });
+  assert.deepEqual((await readRoom("local:alice", "room-1"))?.instagram, { mine: "alice.here", theirsReady: true, theirs: "bob_b", closed: true });
+  assert.equal((await listRooms("local:alice"))[0].closed, true);
+
+  assert.deepEqual(await sendMessage("local:alice", "room-1", "after swap"), { ok: false, reason: "closed" });
+  assert.deepEqual(await shareInstagram("local:alice", "room-1", "someone.else"), { ok: false, reason: "closed" });
+  assert.deepEqual(await withdrawInstagram("local:bob", "room-1"), { ok: false, reason: "closed" });
+});
+
+test("a handle can be changed or taken back before the other person shares", async () => {
+  await shareInstagram("local:alice", "room-1", "first");
+  assert.equal((await shareInstagram("local:alice", "room-1", "second")).ok, true);
+  assert.deepEqual(await withdrawInstagram("local:alice", "room-1"), { ok: true, instagram: { mine: null, theirsReady: false, theirs: null, closed: false } });
+  assert.deepEqual((await readRoom("local:bob", "room-1"))?.instagram, { mine: null, theirsReady: false, theirs: null, closed: false });
+  assert.deepEqual(await shareInstagram("local:bob", "room-1", "bob"), { ok: true, instagram: { mine: "bob", theirsReady: false, theirs: null, closed: false } });
+});
+
+test("concurrent shares close the room exactly once and both see each other", async () => {
+  const [alice, bob] = await Promise.all([
+    shareInstagram("local:alice", "room-1", "alice"),
+    shareInstagram("local:bob", "room-1", "bob"),
+  ]);
+  assert.ok(alice.ok && bob.ok);
+  assert.ok(alice.instagram.closed || bob.instagram.closed);
+  assert.equal((await readRoom("local:alice", "room-1"))?.instagram.theirs, "bob");
+  assert.equal((await readRoom("local:bob", "room-1"))?.instagram.theirs, "alice");
+});
+
+test("Instagram handles are validated on the server", async () => {
+  assert.equal(normalizeInstagramHandle("  @Some_One.99 "), "some_one.99");
+  for (const input of ["", "@", "has space", ".leading", "trailing.", "double..dot", "x".repeat(31), "emoji😀", 42, null]) {
+    assert.equal(normalizeInstagramHandle(input), null);
+    assert.deepEqual(await shareInstagram("local:alice", "room-1", input), { ok: false, reason: "invalid" });
+  }
+});
+
+test("blocking after a swap still removes the room for both members", async () => {
+  await shareInstagram("local:alice", "room-1", "alice");
+  await shareInstagram("local:bob", "room-1", "bob");
+  assert.equal(await blockRoom("local:bob", "room-1"), true);
+  assert.equal(await readRoom("local:alice", "room-1"), null);
+  assert.deepEqual(await listRooms("local:alice"), []);
 });

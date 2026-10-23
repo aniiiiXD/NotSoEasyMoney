@@ -808,7 +808,6 @@ button, input, textarea, select {
   }
 
   .reveal-grid {
-    grid-template-columns: minmax(0, 760px);
     align-items: center;
   }
 

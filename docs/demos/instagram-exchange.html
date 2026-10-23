@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Instagram Exchange Demo</title>
+<style>
+  :root {
+    --ink: #242423; --muted: #6f706c; --line: #eaeaea; --paper: #f8f7f4;
+    --lav: #dedaed; --lav-ink: #625b81; --soft: #f3f3f1;
+    --ig: linear-gradient(135deg, #f0b98d, #c58bd6 55%, #8c7fe0);
+    --serif: Georgia, "Times New Roman", serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  .wrap { width: min(100% - 32px, 1100px); margin: 0 auto; padding: 32px 0 48px; }
+  .label { margin: 0 0 8px; color: var(--lav-ink); font-size: 10px; font-weight: 700; letter-spacing: .11em; text-transform: uppercase; }
+  h1 { margin: 0; font-family: var(--serif); font-size: 36px; font-weight: 400; letter-spacing: -.04em; }
+  .intro { max-width: 640px; margin: 10px 0 0; color: var(--muted); }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 22px 0; }
+  .bar button { min-height: 40px; padding: 0 14px; border: 1px solid #dededb; border-radius: 6px; background: #fff; color: var(--ink); font-weight: 600; cursor: pointer; }
+  .state { padding: 6px 10px; border-radius: 999px; background: #f0eef5; color: var(--lav-ink); font-size: 12px; font-weight: 700; }
+  .phones { display: grid; gap: 20px; }
+  @media (min-width: 860px) { .phones { grid-template-columns: 1fr 1fr; } }
+
+  .phone { display: flex; flex-direction: column; height: 640px; overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+  .who { padding: 8px 16px; background: #15141c; color: #c9c1ea; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+  .head { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .avatar { flex: none; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%; background: var(--lav); color: #4d4766; font-family: var(--serif); font-size: 17px; }
+  .person { flex: 1; min-width: 0; }
+  .person strong { display: block; font-size: 13px; }
+  .person small { color: var(--muted); font-size: 11px; }
+  .ig-btn { min-height: 38px; padding: 0 12px; border: 0; border-radius: 6px; background: var(--ig); color: #fff; font-size: 12px; font-weight: 700; cursor: pointer; }
+  .ig-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  .msgs { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 18px 16px; }
+  .bubble { max-width: 82%; padding: 10px 13px; border-radius: 8px; overflow-wrap: anywhere; }
+  .mine { align-self: flex-end; background: var(--lav); }
+  .theirs { align-self: flex-start; background: var(--soft); }
+  .system { align-self: center; max-width: 92%; padding: 6px 12px; border-radius: 999px; background: #f0eef5; color: var(--lav-ink); font-size: 12px; font-weight: 600; text-align: center; }
+
+  .panel { margin: 0 16px 12px; padding: 14px; border: 1px dashed #c8c2df; border-radius: 12px; background: #faf9fd; }
+  .panel h3 { margin: 0 0 4px; font-size: 14px; }
+  .panel p { margin: 0 0 10px; color: var(--muted); font-size: 12px; }
+  .row { display: flex; gap: 8px; }
+  .handle { flex: 1; min-width: 0; display: flex; align-items: center; border: 1px solid #dededb; border-radius: 6px; background: #fff; padding-left: 10px; }
+  .handle span { color: var(--muted); }
+  .handle input { flex: 1; min-width: 0; min-height: 40px; border: 0; outline: none; background: transparent; font-size: 15px; }
+  .handle:focus-within { border-color: var(--lav-ink); }
+  .primary { min-height: 42px; padding: 0 14px; border: 0; border-radius: 6px; background: var(--ink); color: #fff; font-size: 12px; font-weight: 700; cursor: pointer; }
+  .primary:disabled { opacity: .4; cursor: not-allowed; }
+  .ghost { min-height: 42px; padding: 0 12px; border: 1px solid #dededb; border-radius: 6px; background: #fff; color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer; }
+  .err { margin: 8px 0 0 !important; color: #8b4944 !important; }
+  .pills { display: flex; gap: 8px; margin-top: 10px; }
+  .pill { flex: 1; padding: 7px 10px; border: 1px solid var(--line); border-radius: 999px; background: #fff; color: var(--muted); font-size: 12px; font-weight: 650; text-align: center; }
+  .pill.yes { border-color: #b9b0e0; background: #efecf8; color: var(--lav-ink); }
+
+  .reveal { margin: 0 16px 12px; padding: 18px; border-radius: 12px; background: #15141c; color: #fff; text-align: center; }
+  .reveal .label { color: #c9c1ea; }
+  .reveal a { display: inline-block; margin-top: 6px; color: #fff; font-family: var(--serif); font-size: 24px; text-decoration: none; }
+  .reveal p { margin: 8px 0 0; color: #a9a5bd; font-size: 12px; }
+
+  .composer { display: flex; gap: 8px; padding: 0 16px 16px; }
+  .composer input { flex: 1; min-width: 0; min-height: 44px; padding: 0 12px; border: 1px solid #dededb; border-radius: 6px; font-size: 15px; }
+  .composer input:disabled { background: var(--soft); }
+  .notes { margin-top: 28px; padding: 18px 20px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+  .notes h2 { margin: 0 0 8px; font-family: var(--serif); font-size: 20px; font-weight: 400; }
+  .notes ol { margin: 0; padding-left: 20px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="label">Prototype · not wired to the app</p>
+  <h1>Instagram exchange</h1>
+  <p class="intro">Two matched people, side by side. Each can tap <strong>Instagram</strong>, type their handle and mark themselves ready. Nobody sees a handle until both are ready. Then both handles are shown and the match closes.</p>
+  <div class="bar">
+    <button type="button" id="reset">Reset demo</button>
+    <span class="state" id="state"></span>
+  </div>
+  <div class="phones" id="phones"></div>
+
+  <div class="notes">
+    <h2>Rules in this demo</h2>
+    <ol>
+      <li>Either person can start. Their handle stays hidden from the other person while they wait.</li>
+      <li>The other person only sees "Quiet Fox is ready to swap Instagrams".</li>
+      <li>Until both are ready, either person can change their handle or take it back.</li>
+      <li>When both are ready, each sees the other's handle, the chat becomes read-only and the match is marked closed.</li>
+      <li>Handles must be 1 to 30 letters, numbers, periods or underscores, as on Instagram.</li>
+    </ol>
+  </div>
+</div>
+
+<script>
+  const people = {
+    a: { alias: "Quiet Fox", other: "b" },
+    b: { alias: "Night Owl", other: "a" },
+  };
+  const HANDLE = /^(?!.*\.\.)(?!\.)(?!.*\.$)[a-z0-9._]{1,30}$/;
+  let state;
+
+  function fresh() {
+    return {
+      messages: [
+        { from: "b", text: "okay your answer about Sunday mornings was too relatable" },
+        { from: "a", text: "haha slow coffee and zero plans, that's the dream" },
+        { from: "b", text: "honestly I've loved talking to you" },
+      ],
+      ready: { a: null, b: null },
+      open: { a: false, b: false },
+      draft: { a: "", b: "" },
+      error: { a: "", b: "" },
+      closed: false,
+    };
+  }
+
+  function esc(s) { return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+  function panel(me) {
+    const other = people[me].other;
+    const mine = state.ready[me];
+    const theirs = state.ready[other];
+    const otherAlias = people[other].alias;
+
+    if (state.closed) {
+      return `<div class="reveal">
+        <p class="label">It's a match · Instagrams swapped</p>
+        <div>${esc(otherAlias)} is</div>
+        <a href="https://instagram.com/${esc(theirs)}" target="_blank" rel="noopener">@${esc(theirs)}</a>
+        <p>You shared @${esc(mine)}. This conversation is now closed. Say hi on Instagram.</p>
+      </div>`;
+    }
+
+    const pills = `<div class="pills">
+      <span class="pill ${mine ? "yes" : ""}">You: ${mine ? "ready" : "not yet"}</span>
+      <span class="pill ${theirs ? "yes" : ""}">${esc(otherAlias)}: ${theirs ? "ready" : "not yet"}</span>
+    </div>`;
+
+    if (mine && !state.open[me]) {
+      return `<div class="panel">
+        <h3>You're ready to swap as @${esc(mine)}</h3>
+        <p>${esc(otherAlias)} won't see your handle unless they share theirs too.</p>
+        <div class="row"><button class="ghost" data-act="edit" data-who="${me}">Change handle</button><button class="ghost" data-act="cancel" data-who="${me}">Take it back</button></div>
+        ${pills}
+      </div>`;
+    }
+
+    if (!state.open[me]) {
+      return theirs ? `<div class="panel">
+        <h3>${esc(otherAlias)} is ready to swap Instagrams</h3>
+        <p>Share yours too and you'll both see each other's handle.</p>
+        <div class="row"><button class="primary" data-act="open" data-who="${me}">Share my Instagram</button></div>
+        ${pills}
+      </div>` : "";
+    }
+
+    return `<div class="panel">
+      <h3>Ready to show your Instagram?</h3>
+      <p>Your handle stays hidden until ${esc(otherAlias)} is ready too. Then you both see each other's, and this match closes.</p>
+      <form class="row" data-who="${me}">
+        <label class="handle"><span>@</span><input name="h" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="30" placeholder="your.instagram" value="${esc(state.draft[me])}" aria-label="Your Instagram username"></label>
+        <button class="primary" type="submit">I'm ready</button>
+        <button class="ghost" type="button" data-act="close" data-who="${me}">Cancel</button>
+      </form>
+      ${state.error[me] ? `<p class="err">${esc(state.error[me])}</p>` : ""}
+      ${pills}
+    </div>`;
+  }
+
+  function phone(me) {
+    const other = people[me].other;
+    const msgs = state.messages.map((m) => m.system
+      ? `<div class="system">${esc(m.text)}</div>`
+      : `<div class="bubble ${m.from === me ? "mine" : "theirs"}">${esc(m.text)}</div>`).join("");
+    const showBtn = !state.closed && !state.ready[me] && !state.open[me];
+    return `<section class="phone" aria-label="${esc(people[me].alias)}'s screen">
+      <div class="who">${esc(people[me].alias)}'s phone</div>
+      <div class="head">
+        <span class="avatar">${people[other].alias[0]}</span>
+        <div class="person"><strong>${esc(people[other].alias)}</strong><small>${state.closed ? "Match closed · Instagrams swapped" : "Get to know each other"}</small></div>
+        ${showBtn ? `<button class="ig-btn" data-act="open" data-who="${me}">Instagram</button>` : ""}
+      </div>
+      <div class="msgs">${msgs}</div>
+      ${panel(me)}
+      <form class="composer" data-chat="${me}">
+        <input name="m" placeholder="${state.closed ? "This conversation is closed" : "Write a message..."}" ${state.closed ? "disabled" : ""} aria-label="Message">
+        <button class="primary" ${state.closed ? "disabled" : ""}>Send</button>
+      </form>
+    </section>`;
+  }
+
+  function render() {
+    const phones = document.getElementById("phones");
+    // Keep a half-typed handle when the other phone triggers a re-render.
+    phones.querySelectorAll("form[data-who] input").forEach((i) => { state.draft[i.closest("form").dataset.who] = i.value; });
+    phones.innerHTML = phone("a") + phone("b");
+    phones.querySelectorAll(".msgs").forEach((m) => { m.scrollTop = m.scrollHeight; });
+    const count = Number(Boolean(state.ready.a)) + Number(Boolean(state.ready.b));
+    document.getElementById("state").textContent = state.closed ? "Both ready · handles swapped · match closed" : `${count} of 2 ready`;
+  }
+
+  document.getElementById("phones").addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-act]");
+    if (!btn) return;
+    const me = btn.dataset.who;
+    const act = btn.dataset.act;
+    if (act === "open") { state.open[me] = true; state.error[me] = ""; }
+    if (act === "close") { state.open[me] = false; state.error[me] = ""; }
+    if (act === "edit") { state.open[me] = true; state.draft[me] = state.ready[me]; }
+    if (act === "cancel") {
+      state.ready[me] = null;
+      state.messages.push({ system: true, text: `${people[me].alias} is no longer ready to swap` });
+    }
+    render();
+  });
+
+  document.getElementById("phones").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const form = e.target;
+    if (form.dataset.chat) {
+      const me = form.dataset.chat;
+      const text = form.m.value.trim();
+      if (text && !state.closed) state.messages.push({ from: me, text });
+      render();
+      return;
+    }
+    const me = form.dataset.who;
+    const handle = form.h.value.trim().replace(/^@/, "").toLowerCase();
+    if (!HANDLE.test(handle)) {
+      state.draft[me] = form.h.value;
+      state.error[me] = "Use 1–30 letters, numbers, periods or underscores.";
+      render();
+      return;
+    }
+    const wasReady = Boolean(state.ready[me]);
+    state.ready[me] = handle;
+    state.open[me] = false;
+    state.error[me] = "";
+    state.draft[me] = "";
+    if (state.ready.a && state.ready.b) {
+      state.closed = true;
+      state.messages.push({ system: true, text: "You both said yes. Instagrams swapped and this match is closed." });
+    } else if (!wasReady) {
+      state.messages.push({ system: true, text: `${people[me].alias} is ready to swap Instagrams` });
+    }
+    render();
+  });
+
+  document.getElementById("reset").addEventListener("click", () => { state = fresh(); render(); });
+  state = fresh();
+  render();
+</script>
+</body>
+</html>
