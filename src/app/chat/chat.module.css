@@ -84,3 +84,21 @@
 .reportForm label, .reportForm p { flex-basis: 100%; margin: 0; }
 .reportForm select { min-height: 44px; max-width: 100%; padding: 8px; }
 .reportForm button { min-height: 44px; padding: 8px 14px; cursor: pointer; }
+.instagramButton { flex: none; min-height: 44px; padding: 0 12px; border: 0; border-radius: 5px; background: linear-gradient(135deg, #e0a477, #b77bc9 55%, #7f72d4); color: #fff; font-size: 12px; font-weight: 700; cursor: pointer; }
+.instagramButton:hover { filter: brightness(1.05); }
+.swapPanel { margin: 0 16px 12px; padding: 14px; border: 1px dashed #c8c2df; border-radius: 8px; background: #faf9fd; }
+.swapPanel h2 { margin: 0 0 4px; font-size: 14px; font-weight: 700; }
+.swapPanel > p { margin: 0 0 10px; color: #6f706c; font-size: 12px; line-height: 1.5; }
+.swapPanel .sendError { margin: 8px 0 0; color: #8b4944; font-size: 12px; }
+.swapRow { display: flex; flex-wrap: wrap; gap: 8px; }
+.handleField { flex: 1 1 180px; min-width: 0; display: flex; align-items: center; padding-left: 10px; border: 1px solid #dededb; border-radius: 5px; background: #fff; color: #6f706c; }
+.handleField:focus-within { border-color: #625b81; }
+.handleField input { flex: 1; min-width: 0; min-height: 42px; padding: 0 8px 0 2px; border: 0; outline: none; background: transparent; color: #242423; font-size: 16px; }
+.swapPrimary { min-height: 44px; padding: 0 14px; border: 0; border-radius: 5px; background: #242423; color: #fff; font-size: 12px; font-weight: 700; cursor: pointer; }
+.swapPrimary:disabled { opacity: .4; cursor: not-allowed; }
+.swapReveal { display: grid; justify-items: center; gap: 4px; margin: 0 16px 16px; padding: 20px; border-radius: 8px; background: #15141c; color: #fff; text-align: center; }
+.swapReveal p { margin: 0 0 4px; color: #c9c1ea; font-size: 10px; font-weight: 700; letter-spacing: .11em; text-transform: uppercase; }
+.swapReveal span { color: #a9a5bd; font-size: 13px; }
+.page .swapReveal a { color: #fff; font-family: Georgia, "Times New Roman", serif; font-size: 26px; overflow-wrap: anywhere; }
+.swapReveal small { color: #a9a5bd; font-size: 12px; line-height: 1.5; }
+@media (min-width: 760px) { .swapPanel, .swapReveal { margin-inline: 28px; } }

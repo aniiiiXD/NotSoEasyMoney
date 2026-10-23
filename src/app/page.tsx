@@ -13,7 +13,7 @@ export default function Home() {
           <nav className="desktop-nav" aria-label="Main navigation">
             <a href="#how-it-works">How it works</a>
             <a href="#the-method">Why it works</a>
-            <a href="#your-call">Socials, later</a>
+            <a href="#your-call">Instagram swap</a>
           </nav>
           <div className="header-links">
             <Link className="header-sign-in" href="/sign-in">Sign in</Link>
@@ -109,9 +109,22 @@ export default function Home() {
         <section className="reveal-section" id="your-call" aria-labelledby="reveal-title">
           <div className="landing-width reveal-grid">
             <div className="reveal-copy">
-              <p className="section-label">Socials, later</p>
-              <h2 id="reveal-title">Get to know them first. Show your socials when you&apos;re ready.</h2>
-              <p>Every conversation starts with nicknames, so you can be yourself without the pressure. If you both feel it, swap socials right in the chat.</p>
+              <p className="section-label">The Instagram swap</p>
+              <h2 id="reveal-title">Click with someone? Swap Instagrams in one tap.</h2>
+              <p>Every conversation starts with nicknames, so you can be yourself without the pressure. When it feels right, tap Instagram and add your handle. They only see it if they share theirs too. Both say yes, you both get each other&apos;s Instagram, and the rest is up to you.</p>
+            </div>
+            <div className="chat-mock" aria-hidden="true">
+              <div className="chat-mock-top">
+                <span className="avatar-blank">N</span>
+                <div><strong>Night Owl</strong><span>Get to know each other</span></div>
+              </div>
+              <p className="bubble bubble-them">honestly I&apos;ve loved talking to you</p>
+              <p className="bubble bubble-you">same. want to swap Instagrams?</p>
+              <div className="swap-card">
+                <span className="swap-icon">@</span>
+                <div><strong>Ready to swap Instagrams?</strong><span>Handles stay hidden until you both say yes.</span></div>
+                <div className="swap-status"><span className="swap-yes">You: ready</span><span className="swap-yes">Night Owl: ready</span></div>
+              </div>
             </div>
           </div>
         </section>
