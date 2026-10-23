@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Unrelated Python project vendored in this repo; its .venv ships bundled JS.
+    "catan-rl/**",
   ]),
 ]);
 
