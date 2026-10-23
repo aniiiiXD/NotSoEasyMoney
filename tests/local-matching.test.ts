@@ -35,7 +35,7 @@ async function reset() {
     const result = await client.query<{ name: string }>("SELECT current_database() AS name");
     if (!result.rows[0]?.name.startsWith("mm_test_")) throw new Error("Refusing to reset a non-test database.");
     await client.query(`TRUNCATE TABLE paid_introductions, payment_orders, safety_reports, messages, rooms, candidate_tokens, decisions, blocks,
-      analytics_events, profiles, referral_attributions, referral_codes, app_users`);
+      analytics_events, observability_events, profiles, referral_attributions, referral_codes, app_users`);
   } finally {
     client.release();
   }
