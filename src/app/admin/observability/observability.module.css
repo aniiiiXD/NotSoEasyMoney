@@ -1,0 +1,33 @@
+.page { padding: 16px; max-width: 980px; margin: 0 auto; }
+.header { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid #e3e1dc; }
+.header a { color: #343431; text-decoration: none; font-weight: 650; font-size: 14px; }
+.eyebrow { margin: 26px 0 6px; font-size: 12px; letter-spacing: 0.08em; color: #8a887f; }
+.intro { margin: 0 0 24px; color: #514b64; font-size: 14px; line-height: 1.6; max-width: 640px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 0 0 28px; }
+.stat { border: 1px solid #e3e1dc; border-radius: 8px; background: #fff; padding: 14px 16px; }
+.stat strong { display: block; font: 400 28px Georgia, serif; color: #1f1e1b; }
+.stat span { color: #777670; font-size: 12px; }
+.stat.bad strong { color: #a33a3a; }
+.section { margin: 0 0 30px; }
+.section h2 { margin: 0 0 4px; font-size: 16px; }
+.section p.hint { margin: 0 0 12px; color: #777670; font-size: 12px; }
+.bars { display: flex; align-items: flex-end; gap: 4px; height: 90px; border-bottom: 1px solid #e3e1dc; padding: 8px 0 0; }
+.bar { flex: 1; background: #625b81; border-radius: 3px 3px 0 0; min-height: 2px; position: relative; }
+.barDim { background: #c9c6d6; }
+.barLabel { display: flex; gap: 4px; }
+.barLabel span { flex: 1; text-align: center; font-size: 10px; color: #8a887f; }
+.table { width: 100%; border-collapse: collapse; font-size: 13px; background: #fff; border: 1px solid #e3e1dc; border-radius: 8px; overflow: hidden; }
+.table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: #8a887f; padding: 10px 12px; border-bottom: 1px solid #e3e1dc; background: #faf9f6; }
+.table td { padding: 9px 12px; border-bottom: 1px solid #f0efec; color: #343431; }
+.table tr:last-child td { border-bottom: 0; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.err { color: #a33a3a; font-weight: 650; }
+.funnel { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.funnelStep { border: 1px solid #e3e1dc; border-radius: 8px; background: #fff; padding: 12px 16px; }
+.funnelStep strong { display: block; font: 400 24px Georgia, serif; }
+.funnelStep span { font-size: 12px; color: #777670; }
+.funnelArrow { color: #aaa4bc; font-size: 18px; }
+.empty { color: #777670; font-size: 13px; padding: 12px 0; }
+.footer { margin: 8px 0 40px; color: #8a887f; font-size: 12px; line-height: 1.6; }
+@media (min-width: 680px) { .page { padding: 16px 32px; } }

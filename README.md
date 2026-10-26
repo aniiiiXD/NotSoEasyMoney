@@ -85,6 +85,10 @@ Referral attribution is stored separately from opt-in usage analytics and associ
 
 Members can report and block the other person from an open conversation. Reporting closes the room for both people and records the selected reason for an operator to review. On a trusted operator machine with database access, run `npm run safety-reports -- list` to list up to 100 open reports and `npm run safety-reports -- reviewed REPORT_ID` after review. The queue contains sensitive member and room identifiers; restrict its access and handle it privately. There are no automatic alerts or staffed moderation built into this prototype: the operator must monitor the queue and define a response process.
 
+## Operational observability
+
+Signed-in operators listed in `OBSERVABILITY_ADMIN_USER_IDS` (exact `google:` account IDs, comma-separated) can open the unlisted `/admin/observability` dashboard. It records one event per API request — chat reads and sends, decisions, reveals, profile saves, every payment step and provider webhook — with request duration percentiles, outcome classification, a per-hour volume histogram, the chat and payment funnels, a recent-problems table, and database health. Events contain no message bodies or profile answers, only kinds, timings and small enumerations, and are pruned after 90 days when the dashboard loads. A logging failure never affects a member request.
+
 ## Support and account deletion
 
 Signed-in members can open **Account & support** to send a support ticket or delete their account. Tickets ask for a reply email and are visible at `/admin/support` to operators listed in `REFERRAL_ADMIN_USER_IDS`; operators must check the page and reply manually, as there are no notifications or in-app replies. Deleting an account removes its profile, referral attribution, support tickets, matches, conversations and related messages and reports, and clears analytics as described below. This also removes the affected conversations for the other members. Database backups may retain past data according to the database provider's retention policy. The deletion invalidates existing Google sessions; signing in again starts a new account.
