@@ -54,8 +54,8 @@ export async function POST(request: Request, { params }: Context) {
     const body = input && typeof input === "object" && "body" in input ? input.body : undefined;
     const result = await sendMessage(session.user.id, roomId, body);
     if (!result.ok) {
-      const status = result.reason === "not_found" ? 404 : result.reason === "rate_limited" ? 429 : 400;
-      const error = result.reason === "not_found" ? "Conversation unavailable." : result.reason === "rate_limited" ? "Please slow down and try again." : "Write a message of up to 2,000 characters.";
+      const status = result.reason === "not_found" ? 404 : result.reason === "rate_limited" ? 429 : result.reason === "closed" ? 409 : 400;
+      const error = result.reason === "not_found" ? "Conversation unavailable." : result.reason === "rate_limited" ? "Please slow down and try again." : result.reason === "closed" ? "You swapped Instagrams, so this conversation is closed." : "Write a message of up to 2,000 characters.";
       return { actor: session.user.id, response: Response.json({ error }, { status }) };
     }
     return {

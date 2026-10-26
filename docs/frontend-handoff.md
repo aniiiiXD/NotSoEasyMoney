@@ -7,9 +7,9 @@ Mystery Match is a Next.js App Router prototype. The deployed site at https://my
 1. Sign in at `/sign-in`; a new Google account is registered and redirected to `/join`.
 2. Complete the profile and questionnaire at `/join`.
 3. Browse blind introductions at `/discover` and choose **Say hello** or **Pass**. Both people must choose each other for a room to open.
-4. See rooms at `/chat`, open a conversation at `/chat/[roomId]`, send text messages, or block the other person.
+4. See rooms at `/chat`, open a conversation at `/chat/[roomId]`, send text messages, swap Instagram handles, or block the other person.
 
-The authenticated chat persists in Neon and checks room membership on reads and writes. The current client polls about every five seconds; it does not use live push or WebSockets. Rooms currently return the latest 100 messages. Blocking closes a room for both people. Message text is limited to 2,000 characters; server rate limiting can return HTTP 429.
+The authenticated chat persists in Neon and checks room membership on reads and writes. The current client polls about every five seconds; it does not use live push or WebSockets. Rooms currently return the latest 100 messages. Blocking closes a room for both people. When both people share their Instagram handle, each sees the other's and the room closes: it stays readable but accepts no new messages. Until then, neither side sees the other's handle, only whether they are ready. Message text is limited to 2,000 characters; server rate limiting can return HTTP 429.
 
 ## API endpoints
 
@@ -21,9 +21,11 @@ These routes use the authenticated session cookie; callers do not supply user ID
 | `POST /api/profile` | Save the onboarding payload. See `src/app/join/profile-form.tsx` for the current shape. |
 | `GET /api/candidates` | Return `{ candidates }` containing opaque `candidateId`, `blindAlias`, and `explanation`. |
 | `POST /api/candidates` | Send `{ candidateId, decision: "like" \| "pass" }`; a mutual like can return `{ status: "matched", roomId }`. |
-| `GET /api/rooms` | Return `{ rooms }` with room ID, other person's alias, and last-message time. |
-| `GET /api/rooms/[roomId]/messages` | Return `{ alias, messages }`; each message has `id`, `body`, `mine`, and `createdAt`. |
-| `POST /api/rooms/[roomId]/messages` | Send `{ body }`; returns `{ message }` with HTTP 201. |
+| `GET /api/rooms` | Return `{ rooms }` with room ID, other person's alias, last-message time, and `closed`. |
+| `GET /api/rooms/[roomId]/messages` | Return `{ alias, messages, instagram }`; each message has `id`, `body`, `mine`, and `createdAt`. `instagram` is `{ mine, theirsReady, theirs, closed }`; `theirs` is only set once both have shared. |
+| `POST /api/rooms/[roomId]/messages` | Send `{ body }`; returns `{ message }` with HTTP 201, or HTTP 409 once the room is closed. |
+| `POST /api/rooms/[roomId]/instagram` | Share or change `{ handle }`; returns `{ instagram }`. Closes the room when both have shared. HTTP 409 once closed. |
+| `DELETE /api/rooms/[roomId]/instagram` | Take your handle back before the other person shares; returns `{ instagram }`. |
 | `POST /api/rooms/[roomId]/block` | Block the other member and close the room; returns HTTP 204. |
 
 See `src/app/chat/chat-client.tsx`, `src/app/discover/discovery.tsx`, and `src/app/join/profile-form.tsx` for existing client behavior. Do not expose database credentials, OAuth secrets, internal user IDs, or private questionnaire vectors to the browser.
